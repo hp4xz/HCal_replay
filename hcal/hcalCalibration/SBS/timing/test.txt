@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #HCal TDC offsets obtained 12_19_2023 for db tdc offset timestamp --------[ 2022-07-26 00:00:00 ] and for tdc calib timestamp none
 #Offsets obtained from fits over TDC distributions.
 --------[ 2023-09-01 00:00:00 ]
@@ -28,5 +29,27 @@ sbs.hcal.tdc.offset =
 -234.615 -356.599 -221.526 -368.811 -485.143 -466.27 -440.473 -684.394 -373.01 -390.339 -573.058 -188.477 
 
 
+=======
+
+
+#HCal tdc vs E fit parameters obtained 8_28_2023
+
+--------[ 2021-10-21 00:00:00 ]
+
+#Traditional tdc vs E fit for all PMTs -> y = P0 + P1/( x^P2 ). P0 normal to signal.
+sbs.hcal.tdc.tradtw = 0.837421 0.49
+
+#Exponential tdc vs E fit for all PMTs -> y = P0*exp(-P1*x) + P2. P2 normal to signal.
+sbs.hcal.tdc.expotw = 4.5 8
+
+
+#First order polynomial tdc vs E fit for all PMTs -> P0 + P1*x. P0 normal to signal.
+sbs.hcal.tdc.poltw = -20
+
+
+#First order polynomial adc time vs E fit for all PMTs -> P0 + P1*x. P0 normal to signal.
+sbs.hcal.adct.poltw = -7
+
+>>>>>>> 10be1df2481ce5d90d8fbaf208f54fa7d741c70e
 
 

@@ -1,4 +1,4 @@
-#HCal ADCt offsets obtained 8_8_2023 for db adct offset timestamp none
+#HCal ADCt offsets obtained 8_26_2023 for db adct offset timestamp none
 #Offsets obtained from fits over ADCt distributions.
 --------[ 2021-10-21 00:00:00 ]
 sbs.hcal.adc.timeoffset =

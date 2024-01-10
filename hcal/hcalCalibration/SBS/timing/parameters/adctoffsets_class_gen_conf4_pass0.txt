@@ -1,0 +1,30 @@
+#HCal ADCt offsets obtained 9_5_2023 for db adct offset timestamp none
+#Offsets obtained from fits over ADCt distributions.
+--------[ 2023-01-15 00:00:00 ]
+sbs.hcal.adc.timeoffset =
+-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan 
+-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan 
+-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan 
+-nan -nan -nan -nan -nan -nan 24.3802 -nan -nan -nan -nan -nan 
+-nan -nan -nan -1.20286 -nan -15.1142 -nan -nan -nan -nan -nan -nan 
+-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan 
+-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan 
+-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan 
+-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -37.8628 -nan 
+-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan 
+-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan 
+-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan 
+-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -3.95998 -nan 
+-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan 
+-nan -nan -nan -nan -nan -nan -13.6361 -nan -nan -nan -nan -nan 
+-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan 
+-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan 
+-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan 
+-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan 
+-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan 
+-nan -nan -nan -nan -nan -nan -nan -nan -nan 2.78618 -nan -nan 
+-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan 
+-nan -8.06492 -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan 
+-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan 
+
+

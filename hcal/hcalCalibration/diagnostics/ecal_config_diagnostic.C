@@ -51,9 +51,11 @@ const Int_t xN = 48; //2*kNrows, total number of dispersive bins detection uni
 const Int_t yN = 24; //2*kNcols, total number of transverse bins detection uni
 const Int_t uni_N = 400; // Total number of bins used to measure detection uniformity (hSampFrac histos)
 
-void ecal_config_diagnostic( Int_t kine=-1, const char *tar = "", Int_t field=-1, Int_t iter=0 ){//main
+void ecal_config_diagnostic( const char *experiment = "GEn", Int_t kine=3, const char *tar = "lh2", Int_t field=100, Int_t iter=0 ){//main
 
-  if( kine==-1 || tar=="" || field==-1 ){
+  std::string TAR = tar;
+
+  if( kine==-1 || TAR.compare("")==0 || field==-1 ){
     cout << "Error: Input parameters out of bounds. Please execute with the format:" << endl;
     cout << "  root -l \"ecal_diagnostic.C( <kine>, <tar>, <mag> )\" " << endl;
     cout << "  ..where kine = { 4, 7, 8, 9, 11, 14 }" << endl;
@@ -72,11 +74,11 @@ void ecal_config_diagnostic( Int_t kine=-1, const char *tar = "", Int_t field=-1
   TString configfilename;
   TString outputfilename;
   if( iter==0 ){
-    configfilename = Form( "../config/GMn/SBS%d/secal_%s_sbs%d_f%d.cfg", kine, tar, kine, field );
-    outputfilename = Form( "output/SBS%d/ecal_diag_%s_sbs%d_f%d.root", kine, tar, kine, field );
+    configfilename = Form( "../config/%s/SBS%d/secal_%s_sbs%d_f%d.cfg", experiment, kine, tar, kine, field );
+    outputfilename = Form( "output/%s/SBS%d/ecal_diag_%s_sbs%d_f%d.root", experiment, kine, tar, kine, field );
   }else{
-    configfilename = Form( "../config/GMn/SBS%d/calReview_%s_sbs%d_f%d.cfg", kine, tar, kine, field );
-    outputfilename = Form( "output/SBS%d/ecal_calReview_sbs%d.root", kine, kine );
+    configfilename = Form( "../config/%s/SBS%d/calReview_%s_sbs%d_f%d.cfg", experiment, kine, tar, kine, field );
+    outputfilename = Form( "output/%s/SBS%d/ecal_calReview_sbs%d.root", experiment, kine, kine );
   }
 
   Double_t E_e = -1000.; // Energy of beam (incoming electrons from accelerator)
@@ -334,6 +336,7 @@ void ecal_config_diagnostic( Int_t kine=-1, const char *tar = "", Int_t field=-1
 
     if (abs(W2 - W2_mean)>W2_sig ) continue; 
 
+    hatime->Fill( cblkatime[0] );
     hdy_HCAL->Fill(dy);
     hdx_HCAL->Fill(dx);
 
@@ -343,7 +346,6 @@ void ecal_config_diagnostic( Int_t kine=-1, const char *tar = "", Int_t field=-1
     hSampFrac->Fill( SFrac );
     hSampFrac_vs_X->Fill( HCALx, SFrac );
     hSampFrac_vs_Y->Fill( HCALy, SFrac );
-    hatime->Fill( cblkatime[0] );
     hHCALe->Fill( HCALe );
     hhadke->Fill( HCALe/sampFrac );
 

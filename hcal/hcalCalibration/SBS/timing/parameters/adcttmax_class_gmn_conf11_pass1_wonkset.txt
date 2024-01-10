@@ -1,0 +1,2 @@
+#tmax parameters obtained 9_5_2023 for db adct offset timestamp none
+sbs.hcal.tmax = 29.8106

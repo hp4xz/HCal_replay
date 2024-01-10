@@ -27,23 +27,48 @@ const Int_t E_bins = 1000;
 const Double_t E_lower_lim = 0.;
 const Double_t E_upper_lim = 0.5;
 
-// Overall expo timewalk fit parameters - may need to be tuned at different hadron momenta
+// expo timewalk fit parameters - may need to be tuned at different hadron momenta
 const Double_t tw_fit_llim = 0.02;
 const Double_t tw_fit_ulim = 0.50;
-const Double_t tw_p0_llim = 2.;
-const Double_t tw_p0_ulim = 6.;
-const Double_t tw_p1_llim = 4.;
-const Double_t tw_p1_ulim = 9.;
-const Double_t tw_p2_llim = -10;
-const Double_t tw_p2_ulim = 10;
+const Double_t tw_p0_llim = 4.5;
+const Double_t tw_p0_ulim = 9.;
+const Double_t tw_p1_llim = 8.;
+const Double_t tw_p1_ulim = 12.5;
+const Double_t tw_p2_llim = -1.0;
+const Double_t tw_p2_ulim = 0.0;
+
+// traditional fit tw fit
+const Double_t trad_p0_llim = -2.2;
+const Double_t trad_p0_ulim = -1.8;
+const Double_t trad_p1_llim = 0.75;
+const Double_t trad_p1_ulim = 1.25;
+const Double_t trad_p2_llim = 0.49;
+const Double_t trad_p2_ulim = 0.51;
 
 //pol1 tdc tw fit parameters
-const Double_t p0_set = 3.;
-const Double_t p1_set = -5.;
+const Double_t p0_set = 7.;
+const Double_t p1_set = -18.;
+const Double_t p0_ll = 5.;
+const Double_t p0_ul = 9.;
+const Double_t p1_ll = -20.;
+const Double_t p1_ul = -16.;
 const Double_t fit_ul = 0.50;
 const Double_t fit_ll = 0.01;
 
 //pol1 adct tw fit parameters
+const Double_t ap0_set = 0.6;
+const Double_t ap1_set = -5.2;
+const Double_t ap0_ll = 1.;
+const Double_t ap0_ul = 3.;
+const Double_t ap1_ll = -7.;
+const Double_t ap1_ul = -4.;
+const Double_t afit_ul = 0.50;
+const Double_t afit_ll = 0.01;
+
+//pol1 adct tw fit parameters
+
+//timewalk tdc set
+const Int_t twset = 0;
 
 //trad fit parameters
 const Double_t minE = 0.0001; //GeV - added to prevent division by zero on missing hcal clusters
@@ -52,21 +77,35 @@ const Double_t minE = 0.0001; //GeV - added to prevent division by zero on missi
 const Int_t fit_event_min = 60;
 const Int_t adct_Nsig = 4;
 
-//Main <experiment> <configuration> <quasi-replay> <replay-pass> <number-of-calibration-sets> <parameter-override-option> <override-timestamp>; qreplay should only be performed after new offsets obtained
-void timewalk( const char *experiment = "gmn", Int_t config = 7, bool qreplay = false, Int_t pass = 0 ){
+//for testing
+const bool verbose = false; //set to true if full list of loaded db params desired sent to console
+void coutParams( Double_t params[hcal::maxHCalChan] ){
+  Int_t col = 0;
+  for( Int_t i=0; i<hcal::maxHCalChan; i++ ){
+    std::cout << params[i] << " ";
+    if(col==11){
+      col=0;
+      std::cout << std::endl;
+      continue;
+    }
+    col++;
+  }
+  std::cout << std::endl << std::endl;
+}
 
+//Main <experiment> <configuration> <quasi-replay> <replay-pass> <number-of-calibration-sets> <parameter-override-option> <override-timestamp>; qreplay should only be performed after new offsets obtained
+void timewalk( const char *experiment = "gmn", Int_t config = 8, bool qreplay = true, Int_t pass = 0 ){
+  
   // Define a clock to check macro processing time
   TStopwatch *st = new TStopwatch();
   st->Start( kTRUE );
   
   // Get the date
   std::string date = util::getDate();
-
+  
   // outfile path
   std::string outdir_path = gSystem->Getenv("OUT_DIR");
-  std::string tw_path = outdir_path + Form("/hcal_calibrations/pass%d/timing/timewalk_%s_conf%d_qr%d_pass%d.root",pass,experiment,config,(Int_t)qreplay,pass);
-
-  cout << tw_path << endl;
+  std::string tw_rootpath = outdir_path + Form("/hcal_calibrations/pass%d/timing/timewalk_%s_conf%d_qr%d_pass%d.root",pass,experiment,config,(Int_t)qreplay,pass);
 
   // offset paths and variables
   std::string db_path = gSystem->Getenv("DB_DIR");
@@ -74,6 +113,9 @@ void timewalk( const char *experiment = "gmn", Int_t config = 7, bool qreplay = 
   std::string new_adcgain_path = Form("../energy/parameters/adcgaincoeff_%s_conf%d_pass%d.txt",experiment,config,pass);
   std::string new_adctoffset_path = Form("../timing/parameters/adctoffsets_class_%s_conf%d_pass%d.txt",experiment,config,pass);
   std::string new_tw_path = Form("../timing/parameters/timewalk_%s_conf%d_pass%d.txt",experiment,config,pass);
+  
+  //std::string new_tw_path = "test.txt";
+
   std::string old_db_path = db_path + "/db_sbs.hcal.dat";
   std::string db_tdcoffset_variable = "sbs.hcal.tdc.offset";
   std::string db_tdccalib_variable = "sbs.hcal.tdc.calib";
@@ -87,14 +129,10 @@ void timewalk( const char *experiment = "gmn", Int_t config = 7, bool qreplay = 
   std::string db_gain_variable = "sbs.hcal.adc.gain";
   std::string db_adctoffset_variable = "sbs.hcal.adc.timeoffset";
 
-  std::string test = "/volatile/halla/sbs/seeds/hcal_calibrations/pass0/timing/timewalk_gmn_conf7_qr0_pass0.root";
   // Declare output analysis file
-  TFile *fout = new TFile( tw_path.c_str(), "RECREATE" );
-  //TFile *fout = new TFile( "/w/halla-scshelf2102/sbs/seeds/HCal_replay/hcal/hcalCalibration/SBS/timing/test.root", "RECREATE" );
-  //TFile *fout = new TFile( "/volatile/halla/sbs/seeds/hcal_calibrations/pass0/timing/timewalk_gmn_conf7_qr0_pass0.root", "RECREATE" );
+  TFile *fout = new TFile( tw_rootpath.c_str(), "RECREATE" );
 
-  //TFile *fout = new TFile( test.c_str(), "RECREATE");
-  //TFile *fout = new TFile( "test.root", "RECREATE");
+  //TFile *fout = new TFile( "test.root", "RECREATE" );
 
   // Get information from .csv files
   std::string struct_dir = Form("../config/%s/",experiment); //unique to my environment for now
@@ -113,7 +151,7 @@ void timewalk( const char *experiment = "gmn", Int_t config = 7, bool qreplay = 
   // re-allocate memory at each run to load different cuts/parameters
   TChain *C = nullptr;
   
-  // create output tree
+  //create output tree
   TTree *P = new TTree("P","Analysis Tree");
 
   // Calibration set
@@ -178,6 +216,7 @@ void timewalk( const char *experiment = "gmn", Int_t config = 7, bool qreplay = 
   //Declare histograms for modification later where additional calibration sets are necessary
   TH2D *htdcvE[hcal::gNstamp];
   TH2D *hadctvE[hcal::gNstamp];
+  TH1D *htesttdc[hcal::gNstamp];
   TH1D *htdc[hcal::gNstamp];
   TH1D *hadct[hcal::gNstamp];
   TH1D *htdc_twtrad[hcal::gNstamp];
@@ -204,6 +243,12 @@ void timewalk( const char *experiment = "gmn", Int_t config = 7, bool qreplay = 
 				     adct_bins,
 				     adct_lower_lim,
 				     adct_upper_lim);
+
+    htesttdc[set] = new TH1D(Form("htesttdc_set%d",set),
+			 "null",
+			 tdc_bins,
+			 tdc_lower_lim,
+			 tdc_upper_lim);
 
     htdc[set] = new TH1D(Form("htdc_set%d",set),
 			 "null",
@@ -255,8 +300,8 @@ void timewalk( const char *experiment = "gmn", Int_t config = 7, bool qreplay = 
   //Main loop over runs
   for (Int_t r=0; r<nruns; r++) {
 
-    if( r > 3 )
-      break;
+    // if(r>2)
+    //   break;
 
     //Get run experimental parameters
     std::string current_gain_timestamp = runs[r].adcg_ts;
@@ -287,7 +332,7 @@ void timewalk( const char *experiment = "gmn", Int_t config = 7, bool qreplay = 
     
     //send to console if the target changes
     if( target_change_index != target_index ){
-      cout << target_parameters;
+      cout << endl << target_parameters;
       target_change_index = target_index;
     }
 
@@ -319,12 +364,27 @@ void timewalk( const char *experiment = "gmn", Int_t config = 7, bool qreplay = 
     util::readDB( new_adcgain_path, active_timestamp, db_gain_variable, new_adcg_coeff );
 
     if( qreplay ){
-      util::readDB( new_tw_path, active_timestamp, db_tdctw_trad_variable, new_tdctw_tradpar );
-      util::readDB( new_tw_path, active_timestamp, db_tdctw_expo_variable, new_tdctw_expopar );
-      util::readDB( new_tw_path, active_timestamp, db_tdctw_pol_variable, new_tdctw_polpar );
-      util::readDB( new_tw_path, active_timestamp, db_adcttw_pol_variable, new_adcttw_polpar );
+      std::string single_cal_timestamp = config_parameters.GetSBSTimestamp();
+
+      // util::readDB( new_tw_path, active_timestamp, db_tdctw_trad_variable, new_tdctw_tradpar );
+      // util::readDB( new_tw_path, active_timestamp, db_tdctw_expo_variable, new_tdctw_expopar );
+      // util::readDB( new_tw_path, active_timestamp, db_tdctw_pol_variable, new_tdctw_polpar );
+      // util::readDB( new_tw_path, active_timestamp, db_adcttw_pol_variable, new_adcttw_polpar );
+
+      util::readDB( new_tw_path, single_cal_timestamp, db_tdctw_trad_variable, new_tdctw_tradpar );
+      util::readDB( new_tw_path, single_cal_timestamp, db_tdctw_expo_variable, new_tdctw_expopar );
+      util::readDB( new_tw_path, single_cal_timestamp, db_tdctw_pol_variable, new_tdctw_polpar );
+      util::readDB( new_tw_path, single_cal_timestamp, db_adcttw_pol_variable, new_adcttw_polpar );
     }
 
+    if(verbose){
+      cout << "TDC offsets from path: " << new_tdcoffset_path << endl;
+      coutParams(new_tdc_offsets);
+      cout << "ADCt offsets from path: " << new_adctoffset_path << endl;
+      coutParams(new_adct_offsets);
+      cout << "ADC gain pars from path: " << new_adcgain_path << endl;
+      coutParams(new_adcg_coeff);
+    }
 
     //quasi-replay, get new timewalk parameters. Where param_override is not false, use passed params
     // if( qreplay && param_override.compare("false")==0 ){
@@ -348,7 +408,7 @@ void timewalk( const char *experiment = "gmn", Int_t config = 7, bool qreplay = 
     //if a new timestamp exists, expand the set and update index/old-offsets/old-calib
     if( new_ts || Ncal_set_size==0){
 
-      cout << "Adding new calibration set. Active (energy calibration) timestamp:" << active_timestamp << endl << endl;
+      cout << endl << "Adding new calibration set. Active (energy calibration) timestamp:" << active_timestamp << endl << endl;
 
       Ncal_set_idx = Ncal_set_size;
 
@@ -359,15 +419,28 @@ void timewalk( const char *experiment = "gmn", Int_t config = 7, bool qreplay = 
 
       //update timestamp and old coefficients for corrections. Don't use active timestamp, use db timestamps for old
       tw_cal[Ncal_set_size].timestamp = active_timestamp.c_str();
-      util::readDB( old_db_path, current_gain_timestamp, db_gain_variable, tw_cal[Ncal_set_size].old_param ); //gain 
+      util::readDB( old_db_path, current_gain_timestamp, db_gain_variable, tw_cal[Ncal_set_size].old_param ); //gain
       util::readDB( old_db_path, current_tdcoffset_timestamp, db_tdcoffset_variable, tw_cal[Ncal_set_size].old_paramB );  //tdcoffset
-      util::readDB( old_db_path, current_adctoffset_timestamp, db_adctoffset_variable, tw_cal[Ncal_set_size].old_paramC );  //adctoffset   
+      util::readDB( old_db_path, current_adctoffset_timestamp, db_adctoffset_variable, tw_cal[Ncal_set_size].old_paramC );  //adctoffset  
       util::readDB( old_db_path, current_tdccalib_timestamp, db_tdccalib_variable, tw_cal[Ncal_set_size].tdc_calib );  //tdc calib
+
+      if(verbose){
+	cout << "OLD ADC gain pars from path: " << old_db_path << endl;
+	coutParams(tw_cal[Ncal_set_size].old_param);
+	cout << "OLD TDC offsets pars from path: " << old_db_path << endl;
+	coutParams(tw_cal[Ncal_set_size].old_paramB);
+	cout << "OLD ADCt offsets from path: " << old_db_path << endl;
+	coutParams(tw_cal[Ncal_set_size].old_paramC);
+	cout << "OLD TDC calib from path: " << old_db_path << endl;
+	cout << tw_cal[Ncal_set_size].tdc_calib << endl;
+      }
+
 
       //build analysis histograms
       htdcvE[Ncal_set_size]->SetTitle(Form("TDC vs E primary block only, set: %d;MeV;ns",Ncal_set_size));
       hadctvE[Ncal_set_size]->SetTitle(Form("ADCt vs E primary block only, set: %d;MeV;ns",Ncal_set_size));
       htdc[Ncal_set_size]->SetTitle(Form("TDC hodo/aligned (no tw), set: %d; ns",Ncal_set_size));
+      htesttdc[Ncal_set_size]->SetTitle(Form("TEST TDC hodo/aligned (no tw), set: %d; ns",Ncal_set_size));
       hadct[Ncal_set_size]->SetTitle(Form("ADCt hodo/aligned (no tw), set: %d; ns",Ncal_set_size));
       htdc_twexpo[Ncal_set_size]->SetTitle(Form("TDC timewalk expo corrected, set: %d; ns",Ncal_set_size));
       htdc_twpol[Ncal_set_size]->SetTitle(Form("TDC timewalk pol1 corrected, set: %d; ns",Ncal_set_size));
@@ -384,6 +457,9 @@ void timewalk( const char *experiment = "gmn", Int_t config = 7, bool qreplay = 
       mag_marker = mag;
       target_marker = current_target;
     }
+    Double_t atime0 = cut[0].atime0; //observed elastic peak in adc time
+    Double_t atimesig = cut[0].atime_sig; //observed width of elastic peak in adc time
+
 
     // Setting up chain and branch addresses
     C = new TChain("T");
@@ -489,25 +565,24 @@ void timewalk( const char *experiment = "gmn", Int_t config = 7, bool qreplay = 
     long nevent = 0, nevents = C->GetEntries(); 
     Int_t treenum = 0, currenttreenum = 0;
 
+    cout << endl << endl << "Looping over run " << r << "/" << nruns << endl;
+
     //Main loop over events in run
     while(C->GetEntry(nevent++)) {
 
-      cout << "Analyzing run " << current_runnumber << ": " <<  nevent << "/" << nevents << " \r";
+      cout << "Analyzing run " << current_runnumber << ": " <<  nevent << "/" << nevents << ". Elastics so far: " << total_analyzed_events << " \r";
       cout.flush();
 
       ///////
       //Single-loop elastic globalcut method. Save pass/fail for output tree.
       currenttreenum = C->GetTreeNumber();
       if( nevent == 1 || currenttreenum != treenum ){
-	treenum = currenttreenum; 
-	GlobalCut->UpdateFormulaLeaves();
+    	treenum = currenttreenum; 
+    	GlobalCut->UpdateFormulaLeaves();
       }
       bool failedglobal = GlobalCut->EvalInstance(0) == 0;
 	  
       if( failedglobal ) continue;
-
-      ///////
-      //HCal coincidence time cut (using adctime while hcal tdc suspect, new offsets)
 
       ///////
       //Physics calculations
@@ -546,7 +621,7 @@ void timewalk( const char *experiment = "gmn", Int_t config = 7, bool qreplay = 
 
       //Calculate h-arm quantities
       vector<Double_t> xyhcalexp; util::getxyhcalexpect( vertex, pNhat, hcalorigin, hcalaxes, xyhcalexp );
-      TVector3 hcalpos = hcalorigin + HCALx*hcalaxes[0] + HCALy*hcalaxes[1]; //from primary blk
+      TVector3 hcalpos = hcalorigin + HCALx*hcalaxes[0] + HCALy*hcalaxes[1]; //from primary cluster
       Double_t dx = HCALx - xyhcalexp[0];
       Double_t dy = HCALy - xyhcalexp[1];
 
@@ -555,16 +630,17 @@ void timewalk( const char *experiment = "gmn", Int_t config = 7, bool qreplay = 
       Double_t W2mean = cut[0].W2_mean;
       Double_t W2sig = cut[0].W2_sig;
       bool failedw2 = fabs(W2-W2mean)>W2sig; //Observed mean W2 cut on elastic peak
+
       if( failedw2 ) continue;
 
       ///////
       //BigBite/SBS Acceptance matching.
       bool failedaccmatch = 
-	xyhcalexp[1] > hcal::posHCalYf ||
-	xyhcalexp[1] < hcal::posHCalYi ||
-	xyhcalexp[0] > hcal::posHCalXf ||
-	xyhcalexp[0] < hcal::posHCalXi;
-	  
+    	xyhcalexp[1] > hcal::posHCalYf ||
+    	xyhcalexp[1] < hcal::posHCalYi ||
+    	xyhcalexp[0] > hcal::posHCalXf ||
+    	xyhcalexp[0] < hcal::posHCalXi;
+      
       if( failedaccmatch ) continue;
 
       //////
@@ -572,57 +648,66 @@ void timewalk( const char *experiment = "gmn", Int_t config = 7, bool qreplay = 
       total_analyzed_events++;
       bool missedtdc = cblktime[0]==-1000 ||
       		       cblktime[0]>10000;
-      if( missedtdc ){
+      if( missedtdc )
       	missing_tdc_events++;
-      	continue;
-      }
 	
       ///////
       //Address timewalk with primary cluster block tdc time vs energy
       //primary block id and primary block energy used for both tdc and adct
-      Int_t pblkid = cblkid[0]-1; //define primary block, primary cluster ID
-      Double_t pblke = cblke[0]/tw_cal[Ncal_set_idx].old_param[pblkid]*new_adcg_coeff[pblkid]; //corrected with new gain parameters
+      Double_t pblkid = cblkid[0]-1; //define primary block, primary cluster ID
+
+      Double_t pblke = cblke[0]/tw_cal[Ncal_set_idx].old_param[(int)pblkid]*new_adcg_coeff[(int)pblkid]; //corrected with new gain parameters
 
       //ADC time 
       Double_t pblkatime = cblkatime[0];
       //align atime with new params, paramC is adct offset
-      Double_t hcaladct = pblkatime+tw_cal[Ncal_set_idx].old_paramC[pblkid]-new_adct_offsets[pblkid]; 
+      Double_t hcaladct = pblkatime+tw_cal[Ncal_set_idx].old_paramC[(int)pblkid]-new_adct_offsets[(int)pblkid]; 
       //correct the block adc time with hodoscope to mitigate trigger jitter
       Double_t hcaladct_hodo = hcaladct - HODOtmean;
-      Double_t atime0 = cut[0].atime0; //observed elastic peak in adc time
-      Double_t atimesig = cut[0].atime_sig; //observed width of elastic peak in adc time
+      //Double_t atime0 = cut[0].atime0; //observed elastic peak in adc time
+      //Double_t atimesig = cut[0].atime_sig; //observed width of elastic peak in adc time
       bool failedcoin = abs(hcaladct-atime0)>adct_Nsig*atimesig; //may use this later
 
       //TDC time
       Double_t pblktime = cblktime[0];
       //align block tdc time with new offset parameters, paramB is tdc offset
       Double_t pblktime_aligned = pblktime + 
-	tw_cal[Ncal_set_idx].old_paramB[pblkid] * tw_cal[Ncal_set_idx].tdc_calib - 
-	new_tdc_offsets[pblkid] * tw_cal[Ncal_set_idx].tdc_calib;
+    	tw_cal[Ncal_set_idx].old_paramB[(int)pblkid] * tw_cal[Ncal_set_idx].tdc_calib - 
+    	new_tdc_offsets[(int)pblkid] * tw_cal[Ncal_set_idx].tdc_calib;
       //correct the block tdc time with hodoscope to mitigate trigger jitter
       Double_t pblktime_hodo = pblktime_aligned - HODOtmean;
-      
+
       //correct the primary block times with loaded timewalk corrections on qreplay
       Double_t pblktime_tw_trad = 0.;
       Double_t pblktime_tw_expo = 0.;
       Double_t pblktime_tw_pol = 0.;
       Double_t hcaladct_tw_pol = 0.;
       if( qreplay ){
-	Double_t trad_corr = new_tdctw_tradpar[0]/pow( (pblke+minE), new_tdctw_tradpar[1] );
-	pblktime_tw_trad = pblktime_hodo - trad_corr;
-	htdc_twtrad[Ncal_set_idx]->Fill( pblktime_tw_trad );
+    	Double_t trad_corr = new_tdctw_tradpar[0]/pow( (pblke+minE), new_tdctw_tradpar[1] );
+    	pblktime_tw_trad = pblktime_hodo - trad_corr;
+    	htdc_twtrad[Ncal_set_idx]->Fill( pblktime_tw_trad );
 
-	Double_t expo_corr = new_tdctw_expopar[0]*exp( -new_tdctw_expopar[1]*pblke );
-	pblktime_tw_expo = pblktime_hodo - expo_corr;
-	htdc_twexpo[Ncal_set_idx]->Fill( pblktime_tw_expo );
+    	Double_t expo_corr = new_tdctw_expopar[0]*exp( -new_tdctw_expopar[1]*pblke );
+    	pblktime_tw_expo = pblktime_hodo - expo_corr;
+    	htdc_twexpo[Ncal_set_idx]->Fill( pblktime_tw_expo );
 
-	Double_t tdc_pol_corr = new_tdctw_polpar[0]*pblke;
-	pblktime_tw_pol = pblktime_hodo - tdc_pol_corr;
-	htdc_twpol[Ncal_set_idx]->Fill( pblktime_tw_pol );
+    	Double_t tdc_pol_corr = new_tdctw_polpar[0]*pblke;
+    	pblktime_tw_pol = pblktime_hodo - tdc_pol_corr;
+    	htdc_twpol[Ncal_set_idx]->Fill( pblktime_tw_pol );
 
-	Double_t adct_pol_corr = new_adcttw_polpar[0]*pblke;
-	hcaladct_tw_pol = hcaladct_hodo - adct_pol_corr;
-	hadct_twpol[Ncal_set_idx]->Fill( hcaladct_tw_pol );
+    	Double_t adct_pol_corr = new_adcttw_polpar[0]*pblke;
+    	hcaladct_tw_pol = hcaladct_hodo - adct_pol_corr;
+    	hadct_twpol[Ncal_set_idx]->Fill( hcaladct_tw_pol );
+      }
+
+      //For clarity, reset all values to -1000 if the tdc was missed on this event
+      if( missedtdc ){
+	pblktime = -1000;
+	pblktime_aligned = -1000;
+	pblktime_hodo = -1000;
+	pblktime_tw_trad = -1000;
+	pblktime_tw_expo = -1000;
+	pblktime_tw_pol = -1000;
       }
 
       //build tdc vs E from primary block to extract timewalk parameters
@@ -633,6 +718,7 @@ void timewalk( const char *experiment = "gmn", Int_t config = 7, bool qreplay = 
 
       //build tdc general histos for quality check
       htdc[Ncal_set_idx]->Fill( pblktime_hodo );
+      htesttdc[Ncal_set_idx]->Fill( cblkatime[0] );
       hadct[Ncal_set_idx]->Fill( hcaladct_hodo );
 
       //fill analysis tree
@@ -665,186 +751,190 @@ void timewalk( const char *experiment = "gmn", Int_t config = 7, bool qreplay = 
     
   }//endloop over runs
   
-
-  // Declare canvas and graph for plots
-  TCanvas *tdctw_trad[Ncal_set_size];
-  TCanvas *tdctw_expo[Ncal_set_size];
-  TCanvas *tdctw_pol[Ncal_set_size];
-  TCanvas *adcttw_pol[Ncal_set_size];
-
   // set up arrays for timewalk fits
-  Double_t tdcvE_tradP1[Ncal_set_size];
-  Double_t tdcvE_tradP2[Ncal_set_size];
-  Double_t tdcvE_expoP0[Ncal_set_size];
-  Double_t tdcvE_expoP1[Ncal_set_size];
-  Double_t tdcvE_pol[Ncal_set_size];
-  Double_t adctvE_pol[Ncal_set_size];
+  Double_t tdcvE_tradP1 = 0.;
+  Double_t tdcvE_tradP2 = 0.;
+  Double_t tdcvE_expoP0 = 0.;
+  Double_t tdcvE_expoP1 = 0.;
+  Double_t tdcvE_pol = 0.;
+  Double_t adctvE_pol = 0.;
+
+  // Declare canvases
+  TCanvas *c1 = new TCanvas("c1","TDC_tradfit",1600,1200);
+  TCanvas *c2 = new TCanvas("c2","TDC_expofit",1600,1200);
+  TCanvas *c3 = new TCanvas("c3","TDC_linearfit",1600,1200);
+  TCanvas *c4 = new TCanvas("c4","ADCt_linearfit",1600,1200);
 
   // set up clones of time v E for various fits
-  TH2D *htdc_tradclone[Ncal_set_size];
-  TH2D *htdc_expoclone[Ncal_set_size];
-  TH2D *htdc_polclone[Ncal_set_size];
-  TH2D *hadct_polclone[Ncal_set_size];
+  TH2D *htdc_tradclone = (TH2D*)htdcvE[twset]->Clone("htdc_tradclone");
+  TH2D *htdc_expoclone = (TH2D*)htdcvE[twset]->Clone("htdc_expoclone");
+  TH2D *htdc_polclone = (TH2D*)htdcvE[twset]->Clone("htdc_polclone");
+  TH2D *hadct_polclone = (TH2D*)hadctvE[twset]->Clone("hadct_polclone");
+
+  ////
+  //traditional tdc fit
+
+  std::cout << "working on traditional tdc fit.." << std::endl;
+  
+  c1->cd();
+
+  //Fit the TDC vs E plot with traditional timewalk fit
+  TF1 *fittdc_trad = new TF1( "fittdc_trad", util::g_tradtwfit, tw_fit_llim, tw_fit_ulim, 3 );
+
+  fittdc_trad->SetParameters(( trad_p0_ulim + trad_p0_llim )/2,
+  			     ( trad_p1_ulim + trad_p1_llim )/2,
+  			     ( trad_p2_ulim + trad_p2_llim )/2);
+
+  fittdc_trad->SetParLimits(0,trad_p0_llim,trad_p0_ulim);
+  fittdc_trad->SetParLimits(1,trad_p1_llim,trad_p1_ulim);
+  fittdc_trad->SetParLimits(2,trad_p2_llim,trad_p2_ulim);
+
+  //fittdc_trad->SetParLimits(2,0.3,1.8);
+
+  htdc_tradclone->Fit("fittdc_trad","WQ","",tw_fit_llim,tw_fit_ulim);
+
+  tdcvE_tradP1 = fittdc_trad->GetParameter(1);
+  tdcvE_tradP2 = fittdc_trad->GetParameter(2);
+
+  htdc_tradclone->SetTitle(Form("tdc tradfit P0:%0.2f P1:%0.2f P2:%0.2f",fittdc_trad->GetParameter(0),tdcvE_tradP1,tdcvE_tradP2));  
+  htdc_tradclone->Draw("colz");
+
+  c1->Write();
+
+  ////
+  //exponential tdc fit
+
+  c2->cd();
+  
+  cout << "working on exponential tdc fit.." << endl;
+  
+  //Fit the TDC vs E plot with exponential fit
+  TF1 *fittdc_expo = new TF1( "fittdc_expo", util::g_twfit, tw_fit_llim, tw_fit_ulim, 3 );
+
+  fittdc_expo->SetParameters((tw_p0_ulim+tw_p0_llim)/2,
+			     (tw_p1_ulim+tw_p1_llim)/2,
+			     (tw_p2_ulim+tw_p2_llim)/2);
+  
+  fittdc_expo->SetParLimits(0,tw_p0_llim,tw_p0_ulim);
+  fittdc_expo->SetParLimits(1,tw_p1_llim,tw_p1_ulim);
+  fittdc_expo->SetParLimits(2,tw_p2_llim,tw_p2_ulim);
+  
+  htdc_expoclone->Fit("fittdc_expo","WQ","",tw_fit_llim,tw_fit_ulim);
+  
+  tdcvE_expoP0 = fittdc_expo->GetParameter(0);
+  tdcvE_expoP1 = fittdc_expo->GetParameter(1);
+  
+  htdc_expoclone->SetTitle(Form("tdc expofit P0:%0.2f P1:%0.2f P2:%0.2f",tdcvE_expoP0,tdcvE_expoP1,fittdc_expo->GetParameter(2)));
+  htdc_expoclone->Draw("colz");
+  
+  c2->Write();
+    
+  ////
+  //linear tdc fit
+
+  c3->cd();
+  
+  cout << "working on linear tdc fit.." << endl;
+  
+  //Fit the TDC vs E plots with pol1
+  TF1 *fittdc_pol = new TF1( "fittdc_pol", util::g_lfit, fit_ll, fit_ul, 2 );
+  fittdc_pol->SetParameters(p0_set,p1_set);
+  
+  fittdc_pol->SetParLimits(0,p0_ll,p0_ul);
+  fittdc_pol->SetParLimits(1,p1_ll,p1_ul);
+
+  htdc_polclone->Fit("fittdc_pol","WQ","",fit_ll,fit_ul);
+  tdcvE_pol = fittdc_pol->GetParameter(1);
+
+  htdc_polclone->SetTitle(Form("tdc linearfit P0:%0.2f P1:%0.2f",fittdc_pol->GetParameter(0),tdcvE_pol));
+
+  htdc_polclone->Draw("colz");
+
+  c3->Write();
+
+  ////
+  //linear adct fit
+
+  c4->cd();
+
+  cout << "working on linear adct fit.." << endl;
+
+  //Fit the ADCt vs E plots with pol1
+  TF1 *fitadct_pol = new TF1( "fitadct_pol", util::g_lfit, afit_ll, afit_ul, 2 );
+  fitadct_pol->SetParameters(ap0_set,ap1_set);
+
+  fitadct_pol->SetParLimits(0,ap0_ll,ap0_ul);
+  fitadct_pol->SetParLimits(1,ap1_ll,ap1_ul);
+
+  hadct_polclone->Fit("fitadct_pol","WQ","",afit_ll,afit_ul);
+  adctvE_pol = fitadct_pol->GetParameter(1);
+
+  hadct_polclone->SetTitle(Form("adct linearfit P0:%0.2f P1:%0.2f",fitadct_pol->GetParameter(0),adctvE_pol));
+  hadct_polclone->Draw("colz");
+
+  c4->Write();
+
+  cout << "moving to write parameters to file.." << endl;
 
   // Create timewalk fit parameter files
   ofstream tw;
   if( qreplay )
     new_tw_path = "/dev/null"; //Safety to prevent overwriting constants on quasi-replay
 
-  //Loop over all independent data sets
-  for( Int_t s=0; s<Ncal_set_size; s++ ){
-
-    // define the TH2Ds
-    htdc_tradclone[s] = (TH2D*)htdcvE[s]->Clone("htdc_tradclone");
-    htdc_expoclone[s] = (TH2D*)htdcvE[s]->Clone("htdc_expoclone");
-    htdc_polclone[s] = (TH2D*)htdcvE[s]->Clone("htdc_polclone");
-    hadct_polclone[s] = (TH2D*)hadctvE[s]->Clone("hadct_polclone");
-
-    // define the canvases
-    tdctw_trad[s] = new TCanvas(Form("TDC_tradfit_s%d",s),Form("TDC_tradfit_s%d",s),1600,1200);
-    tdctw_expo[s] = new TCanvas(Form("TDC_expofit_s%d",s),Form("TDC_expofit_s%d",s),1600,1200);
-    tdctw_pol[s] = new TCanvas(Form("TDC_linearfit_s%d",s),Form("TDC_linearfit_s%d",s),1600,1200);
-    adcttw_pol[s] = new TCanvas(Form("ADCt_linearfit_s%d",s),Form("ADCt_linearfit_s%d",s),1600,1200);
-
-    cout << "working on traditional tdc fit.." << endl;
-
-    tdctw_trad[s]->cd();
-
-    //Fit the TDC vs E plot with traditional timewalk fit
-    TF1 *fittdc_trad = new TF1( "fittdc_trad", util::g_tradtwfit, tw_fit_llim, tw_fit_ulim, 3 );
-
-    // fittdc_trad->SetParameters((tw_p0_ulim-tw_p0_llim)/2,
-    // 			       (tw_p1_ulim-tw_p1_llim)/2,
-    // 			       (tw_p2_ulim-tw_p2_llim)/2);
-
-    // fittdc_trad->SetParLimits(0,tw_p0_llim,tw_p0_ulim);
-    // fittdc_trad->SetParLimits(1,tw_p1_llim,tw_p1_ulim);
-    // fittdc_trad->SetParLimits(2,tw_p2_llim,tw_p2_ulim);
-
-    fittdc_trad->SetParLimits(2,0.3,1.8);
-
-    htdc_tradclone[s]->Fit("fittdc_trad","WQ","",tw_fit_llim,tw_fit_ulim);
-
-    tdcvE_tradP1[s] = fittdc_trad->GetParameter(1);
-    tdcvE_tradP2[s] = fittdc_trad->GetParameter(2);
-
-    htdc_tradclone[s]->SetTitle(Form("tdc tradfit P0:%0.2f P1:%0.2f P2:%0.2f",fittdc_trad->GetParameter(0),tdcvE_tradP1[s],tdcvE_tradP2[s]));
-    htdc_tradclone[s]->Draw();
-
-    tdctw_trad[s]->Write();
-
-    cout << "working on exponential tdc fit.." << endl;
-
-    tdctw_expo[s]->cd();
-
-    //Fit the TDC vs E plot with exponential fit
-    TF1 *fittdc_expo = new TF1( "fittdc_expo", util::g_twfit, tw_fit_llim, tw_fit_ulim, 3 );
-
-    // fittdc_expo->SetParameters((tw_p0_ulim-tw_p0_llim)/2,
-    // 			       (tw_p1_ulim-tw_p1_llim)/2,
-    // 			       (tw_p2_ulim-tw_p2_llim)/2);
-
-    fittdc_expo->SetParLimits(0,tw_p0_llim,tw_p0_ulim);
-    fittdc_expo->SetParLimits(1,tw_p1_llim,tw_p1_ulim);
-    fittdc_expo->SetParLimits(2,tw_p2_llim,tw_p2_ulim);
-
-    htdc_expoclone[s]->Fit("fittdc_expo","WQ","",tw_fit_llim,tw_fit_ulim);
-
-    tdcvE_expoP0[s] = fittdc_expo->GetParameter(0);
-    tdcvE_expoP1[s] = fittdc_expo->GetParameter(1);
-
-    htdc_expoclone[s]->SetTitle(Form("tdc expofit P0:%0.2f P1:%0.2f P2:%0.2f",tdcvE_expoP0[s],tdcvE_expoP1[s],fittdc_expo->GetParameter(2)));
-    htdc_expoclone[s]->Draw();
-
-    tdctw_expo[s]->Write();
-
-    cout << "working on linear tdc fit.." << endl;
-
-    tdctw_pol[s]->cd();
-
-    //Fit the TDC vs E plots with pol1
-    TF1 *fittdc_pol = new TF1( "fittdc_pol", util::g_lfit, fit_ll, fit_ul, 2 );
-    fittdc_pol->SetParameters(p0_set,p1_set);
-
-    htdc_polclone[s]->Fit("fittdc_pol","WQ","",fit_ll,fit_ul);
-    tdcvE_pol[s] = fittdc_pol->GetParameter(1);
-
-    htdc_polclone[s]->SetTitle(Form("tdc linearfit P0:%0.2f P1:%0.2f",fittdc_pol->GetParameter(0),tdcvE_pol[s]));
-    htdc_polclone[s]->Draw();
-
-    tdctw_pol[s]->Write();
-
-    cout << "working on linear adct fit.." << endl;
-
-    adcttw_pol[s]->cd();
-
-    //Fit the ADCt vs E plots with pol1
-    TF1 *adcttestfit = new TF1( "adcttestfit", util::g_lfit, fit_ll, fit_ul, 2 );
-    //TF1 *fitadct_pol = new TF1( "fittdc_pol", util::g_lfit, fit_ll, fit_ul, 2 );
-    //fitadct_pol->SetParameters(p0_set,p1_set);
-
-    hadct_polclone[s]->Fit("adcttestfit","WQ");
-    //hadct_polclone[s]->Fit("fitadct_pol","WQ","",fit_ll,fit_ul);
-    adctvE_pol[s] = adcttestfit->GetParameter(1);
-    //adctvE_pol[s] = fitadct_pol->GetParameter(1);
-
-    hadct_polclone[s]->SetTitle(Form("adct linearfit P0:%0.2f P1:%0.2f",fittdc_pol->GetParameter(0),tdcvE_pol[s]));
-    hadct_polclone[s]->Draw();
-
-    adcttw_pol[s]->Write();
-
-  }
-
-  cout << "moving to write parameters to file.." << endl;
-
-  //tdctw.open( new_tw_path );
   if( !qreplay ){
-
-    for( Int_t s=0; s<Ncal_set_size; s++ ){
-      
-      //check if timestamp for calibration set is newer than config timestamp. Use the newer of the two.
-      std::string active_timestamp;
-      util::tsCompare(sbs_timestamp,tw_cal[s].timestamp,active_timestamp);
-      
-      if( s==0 )
-      	tw.open( new_tw_path );
-      else
-      	tw.open( new_tw_path, fstream::app );
-
-      tw << endl << endl << "#HCal tdc vs E fit parameters obtained " << date.c_str() << endl;
-
-      tw << endl << active_timestamp << endl << endl;
-
-      tw << "#Traditional tdc vs E fit for all PMTs -> y = P0 + P1/( x^P2 ). P0 normal to signal." << endl;
-	      
-      tw << db_tdctw_trad_variable << " = ";
-      tw << tdcvE_tradP1[s] << " ";
-      tw << tdcvE_tradP2[s] << endl << endl;
-
-      tw << "#Exponential tdc vs E fit for all PMTs -> y = P0*exp(-P1*x) + P2. P2 normal to signal." << endl;
-	      
-      tw << db_tdctw_expo_variable << " = ";
-      tw << tdcvE_expoP0[s] << " ";
-      tw << tdcvE_expoP1[s] << endl << endl;
-
-      tw << endl << "#First order polynomial tdc vs E fit for all PMTs -> P0 + P1*x. P0 normal to signal." << endl;
-      
-      tw << db_tdctw_pol_variable << " = ";
-      tw << tdcvE_pol[s] << endl << endl;
-
-      tw << endl << "#First order polynomial adc time vs E fit for all PMTs -> P0 + P1*x. P0 normal to signal." << endl;
-      
-      tw << db_adcttw_pol_variable << " = ";
-      tw << adctvE_pol[s] << endl << endl;
     
-      tw << endl << endl; //needed for now to prevent bug in util::readDB
+    //check if timestamp for calibration set is newer than config timestamp. Use the newer of the two.
+    std::string active_timestamp;
+    util::tsCompare(sbs_timestamp,tw_cal[twset].timestamp,active_timestamp);
+        
+    tw.open( new_tw_path );
 
-    }
+    tw << endl << endl << "#HCal tdc vs E fit parameters obtained " << date.c_str() << endl;
+
+    tw << endl << active_timestamp << endl << endl;
+
+    tw << "#Traditional tdc vs E fit for all PMTs -> y = P0 + P1/( x^P2 ). P0 normal to signal." << endl;
+	      
+    tw << db_tdctw_trad_variable << " = ";
+    tw << tdcvE_tradP1 << " ";
+    tw << tdcvE_tradP2 << endl << endl;
+
+    tw << "#Exponential tdc vs E fit for all PMTs -> y = P0*exp(-P1*x) + P2. P2 normal to signal." << endl;
+	      
+    tw << db_tdctw_expo_variable << " = ";
+    tw << tdcvE_expoP0 << " ";
+    tw << tdcvE_expoP1 << endl << endl;
+
+    tw << endl << "#First order polynomial tdc vs E fit for all PMTs -> P0 + P1*x. P0 normal to signal." << endl;
+      
+    tw << db_tdctw_pol_variable << " = ";
+    tw << tdcvE_pol << endl << endl;
+
+    tw << endl << "#First order polynomial adc time vs E fit for all PMTs -> P0 + P1*x. P0 normal to signal." << endl;
+      
+    tw << db_adcttw_pol_variable << " = ";
+    tw << adctvE_pol << endl << endl;
+    
+    tw << endl << endl; //needed for now to prevent bug in util::readDB
+    
   }
 
   tw.close();
 
-  cout << "parameters written to file. cleaning up.." << endl;
+  //clean up
+  for( Int_t unused_set_index=Ncal_set_size; unused_set_index<hcal::gNstamp; unused_set_index++ ){
+    delete htdcvE[unused_set_index];
+    delete hadctvE[unused_set_index];
+    delete htdc[unused_set_index];
+    delete hadct[unused_set_index];
+    delete htdc_twtrad[unused_set_index];
+    delete htdc_twexpo[unused_set_index];
+    delete htdc_twpol[unused_set_index];
+    delete hadct_twpol[unused_set_index];
+  }
+
+  cout << endl << "Writing parameters to " << new_tw_path << endl << endl;
+  cout << "Writing output root file to " << tw_rootpath << endl << endl;
 
   fout->Write();
 
