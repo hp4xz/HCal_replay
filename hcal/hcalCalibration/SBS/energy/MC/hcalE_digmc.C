@@ -17,15 +17,20 @@
 #include "TStopwatch.h"
 #include "../../include/sbs.h"
 
-const Double_t bins_SFE = 400.;
-const Double_t start_SFE = 0.;
-const Double_t end_SFE = 1.;
+const Double_t bins_E = 400;
+const Double_t start_E = 0.;
+//const Double_t end_E = 1.0;
+//const Double_t end_E = 1.8; //for now comment in for SBS11
+const Double_t end_E = 1.4; //for now comment in for SBS77
+const Double_t bins_SF = 400;
+const Double_t start_SF = 0.;
+const Double_t end_SF = 0.4;
 const Double_t bins_W2 = 200.;
 const Double_t start_W2 = 0.;
 const Double_t end_W2 = 2.;
-const Double_t bins_E = 200.;
-const Double_t start_E = 0.;
-const Double_t end_E = 5.;
+const Double_t bins_bbE = 200.;
+const Double_t start_bbE = 0.;
+const Double_t end_bbE = 5.;
 const Double_t bins_dy = 200.;
 const Double_t start_dy = -1.;
 const Double_t end_dy = 1.;
@@ -37,7 +42,7 @@ const Int_t maxptracks = 1000;
 const Double_t dx_offset = -0.5975;
 
 //Main <experiment> <configuration>
-void hcalE_digmc( const char *experiment = "gmn", Int_t config=4 ){
+void hcalE_digmc( const char *experiment = "gmn", Int_t config=11 ){
   
   // Define a clock to check macro processing time
   TStopwatch *st = new TStopwatch();
@@ -75,27 +80,27 @@ void hcalE_digmc( const char *experiment = "gmn", Int_t config=4 ){
     
   TH1D *hE_nocut = new TH1D("hE_mc_nocut",
 		      "HCal E no cut, MC; GeV",
-		      bins_SFE,
-		      start_SFE,
-		      end_SFE);
+		      bins_E,
+		      start_E,
+		      end_E);
 
   TH1D *hE = new TH1D("hE_mc",
 		      "HCal E, MC; GeV",
-		      bins_SFE,
-		      start_SFE,
-		      end_SFE);
+		      bins_E,
+		      start_E,
+		      end_E);
   
   TH1D *hSF_nocut = new TH1D("hSF_mc_nocut",
 		       "HCal Sampling Fraction; E/KE_{p}",
-		       bins_SFE,
-		       start_SFE,
-		       end_SFE);
+		       bins_SF,
+		       start_SF,
+		       end_SF);
   
   TH1D *hSF = new TH1D("hSF_mc",
 		       "HCal Sampling Fraction; E/KE_{p}",
-		       bins_SFE,
-		       start_SFE,
-		       end_SFE);
+		       bins_SF,
+		       start_SF,
+		       end_SF);
   
   TH1D *hW2 = new TH1D("hW2_mc",
 		       "W^2; GeV^2",
@@ -111,13 +116,13 @@ void hcalE_digmc( const char *experiment = "gmn", Int_t config=4 ){
   
   TH1D *hpse = new TH1D("hpse_mc",
 		       "Preshower E; GeV",
-		       bins_E,
-		       start_E,
-		       end_E);
+		       bins_bbE,
+		       start_bbE,
+		       end_bbE);
   
   TH1D *htrp = new TH1D("htrp_mc",
 		       "Primary track p; GeV",
-		       bins_E,
+		       bins_bbE,
 		       -5,
 		       5);
   
@@ -129,9 +134,9 @@ void hcalE_digmc( const char *experiment = "gmn", Int_t config=4 ){
 
   TH1D *hshe = new TH1D("hshe_mc",
 		       "Shower E; GeV",
-		       bins_E,
-		       start_E,
-		       end_E);
+		       bins_bbE,
+		       start_bbE,
+		       end_bbE);
   
   TH1D *hgh = new TH1D("hgh_mc",
 		       "GEM hits; GeV^2",
@@ -190,15 +195,15 @@ void hcalE_digmc( const char *experiment = "gmn", Int_t config=4 ){
 
   TH1D *hE_tridx = new TH1D("hE_mc_tridx",
 			    "HCal E, hcal track index = 1, MC; GeV",
-			    bins_SFE,
-			    start_SFE,
-			    end_SFE);
+			    bins_E,
+			    start_E,
+			    end_E);
   
   TH1D *hSF_tridx = new TH1D("hSF_mc_tridx",
 		       "HCal Sampling Fraction, hcal track index = 1; E/KE_{p}",
-		       bins_SFE,
-		       start_SFE,
-		       end_SFE);
+		       bins_SF,
+		       start_SF,
+		       end_SF);
 
   //Get replayed mc data file
   std::string rootfile_dir = "/lustre19/expphy/volatile/halla/sbs/seeds/sim091523/";
@@ -248,7 +253,7 @@ void hcalE_digmc( const char *experiment = "gmn", Int_t config=4 ){
   Int_t Ncid;
   Double_t cblkid[hcal::maxHCalChan], cblke[hcal::maxHCalChan], cblkatime[hcal::maxHCalChan], cblktime[hcal::maxHCalChan], cblkagain[hcal::maxHCalChan];
   Double_t cid[hcal::maxHCalClus], crow[hcal::maxHCalClus], ccol[hcal::maxHCalClus], ce[hcal::maxHCalClus], cx[hcal::maxHCalClus], cy[hcal::maxHCalClus], catime[hcal::maxHCalClus];
-  Double_t GEMhits;
+  Double_t GEMhits[hcal::maxTracks];
   Double_t kineW2;
   
   //MC truth info
@@ -329,7 +334,7 @@ void hcalE_digmc( const char *experiment = "gmn", Int_t config=4 ){
   C->SetBranchAddress( "bb.sh.e", &BBsh_e );
   C->SetBranchAddress( "bb.sh.x", &BBsh_x );
   C->SetBranchAddress( "bb.sh.y", &BBsh_y ); 
-  C->SetBranchAddress( "bb.gem.track.nhits", &GEMhits ); 
+  C->SetBranchAddress( "bb.gem.track.nhits", GEMhits ); 
   C->SetBranchAddress( "Ndata.sbs.hcal.clus.id", &Ncid ); //Odd maxing out at 10 clusters on all cluster Ndata objects, so this is needed in addition to sbs.hcal.nclus
   C->SetBranchAddress( "MC.hcalhit_ptridx", MC_ptrackidx ); 
   C->SetBranchAddress( "Ndata.MC.hcalhit_ptridx", &Ndata_MC_ptrackidx);
@@ -384,7 +389,7 @@ void hcalE_digmc( const char *experiment = "gmn", Int_t config=4 ){
     
     ///////
     //HCal primary cluster coincidence time cut (using adctime while hcal tdc suspect, new offsets)
-    Int_t pblkid = cblkid[0]-1; //define primary block, primary cluster ID
+    Int_t pblkid = (int)cblkid[0]-1; //define primary block, primary cluster ID
     
     Double_t natime = cblkatime[0];
     Double_t atime0 = cut[0].atime0; //observed elastic peak in adc time
@@ -509,7 +514,7 @@ void hcalE_digmc( const char *experiment = "gmn", Int_t config=4 ){
       hshe->Fill( BBsh_e );
     htrp->Fill( BBtr_p[0] );
     hvz->Fill( BBtr_vz[0] );
-    hgh->Fill( GEMhits );
+    hgh->Fill( GEMhits[0] );
     hdy->Fill( dy );
     hdx->Fill( dx );
     hfgl->Fill( failedglobal );

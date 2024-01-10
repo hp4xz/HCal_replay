@@ -23,6 +23,60 @@ const Double_t tdc_fit_llim = -120.;
 const Double_t tdc_fit_ulim = 50.;
 const Int_t fit_min = 50;
 const Double_t FWHM = 0.05; //approx fullwidthhalfmax hcal E dist
+const Double_t adct_FWHM = 5; //approx fullwidthhalfmax hcal adc time
+
+void fitAggHistograms(const char* file1, const char* file2, const char* adct_fitcomp_path, int set ) {
+    // Open the ROOT files and get the histograms
+    TFile f1(file1, "READ");
+    TFile f2(file2, "READ");
+    
+    TH1D* hist1 = (TH1D*) f1.Get(Form("hadct_set%d",set)); // replace name_of_hist1 with the actual name
+    TH1D* hist2 = (TH1D*) f2.Get(Form("hadct_set%d",set)); // replace name_of_hist2 with the actual name
+    
+    // Remove existing fits
+    hist1->GetListOfFunctions()->Clear();
+    hist2->GetListOfFunctions()->Clear();
+    
+    // Name the resulting histogram comparison
+    hist1->SetTitle("ADC time alignment comparison, all channels");
+
+    // Fit the histograms dynamically
+    double max1 = hist1->GetBinCenter(hist1->GetMaximumBin());
+    double max2 = hist2->GetBinCenter(hist2->GetMaximumBin());
+    
+    hist1->Fit("gaus", "Q", "", max1 - adct_FWHM, max1 + adct_FWHM);
+    hist2->Fit("gaus", "Q", "", max2 - adct_FWHM, max2 + adct_FWHM);
+    
+    // Extract fit results
+    TF1* fit1 = hist1->GetFunction("gaus");
+    TF1* fit2 = hist2->GetFunction("gaus");
+
+    double mean1 = fit1->GetParameter(1);
+    double sigma1 = fit1->GetParameter(2);
+
+    double mean2 = fit2->GetParameter(1);
+    double sigma2 = fit2->GetParameter(2);
+
+    // Create a canvas and plot
+    TCanvas* canvas = new TCanvas("canvas", "Comparison", 1600, 800);
+    
+    hist1->SetLineColor(kBlack);
+    hist2->SetLineColor(kGreen);
+    
+    hist1->Draw();
+    hist2->Draw("SAME");
+    
+    // Create the legend
+    TLegend* leg = new TLegend(0.7, 0.8, 0.89, 0.89);
+    leg->AddEntry(hist1, Form("Before Alignment: Mean = %.2f, #sigma = %.2f", mean1, sigma1), "l");
+    leg->AddEntry(hist2, Form("After Alignment: Mean = %.2f, #sigma = %.2f", mean2, sigma2), "l");
+    leg->Draw();
+
+    canvas->SaveAs(adct_fitcomp_path);
+    
+    f1.Close();
+    f2.Close();
+}
 
 //Gets the maximum bin on a user passed range
 Int_t get_max_bin_on_range( TH1D *h, Double_t xlow, Double_t xhigh ){
@@ -144,7 +198,7 @@ void generate_mg( std::string qr0path, std::string qr1path, std::string type, TM
 }
 
 //Main. Script to generate all necessary plots for calibration quality checks. See overleaf for quality check template
-void quality_check( const char *experiment = "gmn", Int_t config = 11, Int_t pass = 1, bool h2only = false ){
+void quality_check( const char *experiment = "gmn", Int_t config = 9, Int_t pass = 1, bool h2only = true ){
   
   // set style
   gStyle->SetOptFit(0);
@@ -154,7 +208,8 @@ void quality_check( const char *experiment = "gmn", Int_t config = 11, Int_t pas
   std::string h2opt = "";
   if( h2only )
     h2opt = "_lh2only";
-  // quality_check.C Plot output directory
+
+  // Default plot output directory
   std::string plotdir = Form("../quality_plots/%s/conf%d%s/",experiment,config,h2opt.c_str());
 
   // Calibration analysis files output directory
@@ -211,8 +266,14 @@ void quality_check( const char *experiment = "gmn", Int_t config = 11, Int_t pas
 
   }
 
-  std::string adct_fitcomp_path = plotdir + "adct_fitcomp.png";
+  //ADC time aggregate plot comparisons
+
+  std::string adct_fitcomp_path = plotdir + "adct_all_fitcomp.png";
   c1->SaveAs(adct_fitcomp_path.c_str());
+
+  //Generate adct aggregate plots by calibration set
+  for( Int_t set=0; set<adct_align_Nsets; set++ )
+    fitAggHistograms(adct_align_qr0_path.c_str(),adct_align_qr1_path.c_str(),adct_fitcomp_path.c_str(),set);
 
   /////////////
   //TDC plots//
@@ -270,8 +331,10 @@ void quality_check( const char *experiment = "gmn", Int_t config = 11, Int_t pas
   std::string adc_gain_param = "sbs.hcal.adc.gain";
   // std::string hcal_energy_qr0_path = outdir_path + Form("/hcal_calibrations/pass%d/energy/ecal_class_test_%s_conf%d_qr0_pass%d.root",pass,experiment,config,pass);
   // std::string hcal_energy_qr1_path = outdir_path + Form("/hcal_calibrations/pass%d/energy/ecal_class_test_%s_conf%d_qr1_pass%d.root",pass,experiment,config,pass);
-  std::string hcal_energy_qr0_path = outdir_path + Form("/hcal_calibrations/pass%d/energy/ecal%s_%s_conf%d_qr0_pass%d.root",pass,h2opt.c_str(),experiment,config,pass);
-  std::string hcal_energy_qr1_path = outdir_path + Form("/hcal_calibrations/pass%d/energy/ecal%s_%s_conf%d_qr1_pass%d.root",pass,h2opt.c_str(),experiment,config,pass);
+  // std::string hcal_energy_qr0_path = outdir_path + Form("/hcal_calibrations/pass%d/energy/ecal%s_%s_conf%d_qr0_pass%d.root",pass,h2opt.c_str(),experiment,config,pass);
+  // std::string hcal_energy_qr1_path = outdir_path + Form("/hcal_calibrations/pass%d/energy/ecal%s_%s_conf%d_qr1_pass%d.root",pass,h2opt.c_str(),experiment,config,pass);
+  std::string hcal_energy_qr0_path = outdir_path + Form("/hcal_calibrations/pass%d/energy/ecal_lh2only_%s_conf%d_qr0_pass%d.root",pass,experiment,config,pass);
+  std::string hcal_energy_qr1_path = outdir_path + Form("/hcal_calibrations/pass%d/energy/ecal_lh2only_%s_conf%d_qr1_pass%d.root",pass,experiment,config,pass);
   //std::string hcal_energy_qr1_path = outdir_path + Form("/hcal_calibrations/qreplay/qreplay%s_from_gmn_8_1_to_%s_%d_%d.root",h2opt.c_str(),experiment,config,pass);
 
   //determine how many calibration sets exist
@@ -826,121 +889,121 @@ void quality_check( const char *experiment = "gmn", Int_t config = 11, Int_t pas
 
   /////////////////////////////////////////
   // Get TDC vs E before calibration canvas
-  TCanvas *c11 = new TCanvas("c11","TDC vs E Before Cal",1600/hcal_energy_Nsets,1200);
+  // TCanvas *c11 = new TCanvas("c11","TDC vs E Before Cal",1600/hcal_energy_Nsets,1200);
 
-  // divide the canvas
-  c11->Divide(1,hcal_energy_Nsets);
+  // // divide the canvas
+  // c11->Divide(1,hcal_energy_Nsets);
 
-  std::string hcal_tw_qr0_path = outdir_path + Form("/hcal_calibrations/pass%d/timing/tdctw_class_%s_conf%d_qr0_pass%d.root",pass,experiment,config,pass);
-  std::string hcal_tw_qr1_path = outdir_path + Form("/hcal_calibrations/pass%d/timing/tdctw_class_%s_conf%d_qr1_pass%d.root",pass,experiment,config,pass);
+  // std::string hcal_tw_qr0_path = outdir_path + Form("/hcal_calibrations/pass%d/timing/tdctw_class_%s_conf%d_qr0_pass%d.root",pass,experiment,config,pass);
+  // std::string hcal_tw_qr1_path = outdir_path + Form("/hcal_calibrations/pass%d/timing/tdctw_class_%s_conf%d_qr1_pass%d.root",pass,experiment,config,pass);
 
 
-  //Generate histograms by calibration set
-  for( Int_t set=0; set<hcal_energy_Nsets; set++ ){
+  // //Generate histograms by calibration set
+  // for( Int_t set=0; set<hcal_energy_Nsets; set++ ){
     
-    c11->cd(set+1);
-    gStyle->SetOptStat(0);
-    gStyle->SetOptFit(0);
-    gStyle->SetPalette(53);
+  //   c11->cd(set+1);
+  //   gStyle->SetOptStat(0);
+  //   gStyle->SetOptFit(0);
+  //   gStyle->SetPalette(53);
 
-    TFile *f1 = TFile::Open(hcal_tw_qr0_path.c_str());
-    TH2D *htvE = (TH2D*)f1->Get(Form("htdcvE_pblk_all_set%d",set));
-    htvE->Draw("colz");
+  //   TFile *f1 = TFile::Open(hcal_tw_qr0_path.c_str());
+  //   TH2D *htvE = (TH2D*)f1->Get(Form("htdcvE_pblk_all_set%d",set));
+  //   htvE->Draw("colz");
 
-  }
+  // }
 
-  std::string tvE_before_path = plotdir + "tvE_before.png";
-  c11->SaveAs(tvE_before_path.c_str());
+  // std::string tvE_before_path = plotdir + "tvE_before.png";
+  // c11->SaveAs(tvE_before_path.c_str());
 
-  ////////////////////////////////////////
-  // Get TDC vs E after calibration canvas
-  TCanvas *c12 = new TCanvas("c12","TDC vs E After Cal",1600/hcal_energy_Nsets,1200);
+  // ////////////////////////////////////////
+  // // Get TDC vs E after calibration canvas
+  // TCanvas *c12 = new TCanvas("c12","TDC vs E After Cal",1600/hcal_energy_Nsets,1200);
 
-  // divide the canvas
-  c12->Divide(1,hcal_energy_Nsets);
-  gStyle->SetOptStat(0);
-  gStyle->SetOptFit(0);
-  gStyle->SetPalette(53);
+  // // divide the canvas
+  // c12->Divide(1,hcal_energy_Nsets);
+  // gStyle->SetOptStat(0);
+  // gStyle->SetOptFit(0);
+  // gStyle->SetPalette(53);
 
-  //Generate histograms by calibration set
-  for( Int_t set=0; set<hcal_energy_Nsets; set++ ){
+  // //Generate histograms by calibration set
+  // for( Int_t set=0; set<hcal_energy_Nsets; set++ ){
     
-    c12->cd(set+1);
+  //   c12->cd(set+1);
 
-    TFile *f1 = TFile::Open(hcal_tw_qr1_path.c_str());
-    TH2D *htvE = (TH2D*)f1->Get(Form("htdcvE_pblk_all_set%d",set));
-    htvE->Draw("colz");
+  //   TFile *f1 = TFile::Open(hcal_tw_qr1_path.c_str());
+  //   TH2D *htvE = (TH2D*)f1->Get(Form("htdcvE_pblk_all_set%d",set));
+  //   htvE->Draw("colz");
 
-  }
+  // }
 
-  std::string tvE_after_path = plotdir + "tvE_after.png";
-  c12->SaveAs(tvE_after_path.c_str());
+  // std::string tvE_after_path = plotdir + "tvE_after.png";
+  // c12->SaveAs(tvE_after_path.c_str());
 
-  ///////////////////////////////////////////////////////////////
-  // Get TDC vs TDC (timewalk corrected) after calibration canvas
-  TCanvas *c13 = new TCanvas("c13","TDC Correction Comparison",1600,1200/hcal_energy_Nsets);
+  // ///////////////////////////////////////////////////////////////
+  // // Get TDC vs TDC (timewalk corrected) after calibration canvas
+  // TCanvas *c13 = new TCanvas("c13","TDC Correction Comparison",1600,1200/hcal_energy_Nsets);
 
-  // divide the canvas
-  c13->Divide(hcal_energy_Nsets,1);
-  gStyle->SetOptStat(0);
-  gStyle->SetOptFit(0);
+  // // divide the canvas
+  // c13->Divide(hcal_energy_Nsets,1);
+  // gStyle->SetOptStat(0);
+  // gStyle->SetOptFit(0);
 
-  Double_t approx_sigma = 5; //ns
+  // Double_t approx_sigma = 5; //ns
 
-  //Generate histograms by calibration set
-  for( Int_t set=0; set<hcal_energy_Nsets; set++ ){
+  // //Generate histograms by calibration set
+  // for( Int_t set=0; set<hcal_energy_Nsets; set++ ){
     
-    c13->cd(set+1);
+  //   c13->cd(set+1);
 
-    TFile *f1 = TFile::Open(hcal_tw_qr1_path.c_str());
-    TH1D *htdc = (TH1D*)f1->Get(Form("htdc_set%d",set));
-    htdc->SetLineColor(kBlack);
-    htdc->SetTitle(Form("HCal TDC Primary Block, Primary Cluster, Set %d",set));
-    htdc->GetXaxis()->SetRangeUser(tdc_fit_llim,tdc_fit_ulim);
-    htdc->Draw("hist");
+  //   TFile *f1 = TFile::Open(hcal_tw_qr1_path.c_str());
+  //   TH1D *htdc = (TH1D*)f1->Get(Form("htdc_set%d",set));
+  //   htdc->SetLineColor(kBlack);
+  //   htdc->SetTitle(Form("HCal TDC Primary Block, Primary Cluster, Set %d",set));
+  //   htdc->GetXaxis()->SetRangeUser(tdc_fit_llim,tdc_fit_ulim);
+  //   htdc->Draw("hist");
 
-    //get reasonable limits on fit
-    Double_t tdcmin = htdc->GetXaxis()->GetXmin();
-    Double_t tdcmax = htdc->GetXaxis()->GetXmax();
-    Int_t tdctotalbins = htdc->GetNbinsX();
-    Int_t tdcbinmax = htdc->GetMaximumBin();
-    Double_t tdcbinmaxX = tdcmin+tdcbinmax*(tdcmax-tdcmin)/tdctotalbins;
-    Double_t tdcllim = tdcbinmaxX-approx_sigma;
-    Double_t tdculim = tdcbinmaxX+approx_sigma;
-    htdc->Fit("gaus","0","",tdcllim,tdculim);
-    TF1 *fittdc = htdc->GetFunction("gaus");
-    Double_t fittdcp2 = fittdc->GetParameter(2);
+  //   //get reasonable limits on fit
+  //   Double_t tdcmin = htdc->GetXaxis()->GetXmin();
+  //   Double_t tdcmax = htdc->GetXaxis()->GetXmax();
+  //   Int_t tdctotalbins = htdc->GetNbinsX();
+  //   Int_t tdcbinmax = htdc->GetMaximumBin();
+  //   Double_t tdcbinmaxX = tdcmin+tdcbinmax*(tdcmax-tdcmin)/tdctotalbins;
+  //   Double_t tdcllim = tdcbinmaxX-approx_sigma;
+  //   Double_t tdculim = tdcbinmaxX+approx_sigma;
+  //   htdc->Fit("gaus","0","",tdcllim,tdculim);
+  //   TF1 *fittdc = htdc->GetFunction("gaus");
+  //   Double_t fittdcp2 = fittdc->GetParameter(2);
 
-    TH1D *htdc_tw = (TH1D*)f1->Get(Form("htdc_tw_set%d",set));
-    htdc_tw->SetLineColor(kGreen);
-    htdc_tw->SetTitle(Form("HCal TDC Primary Block, Primary Cluster, Set %d",set));
-    htdc_tw->GetXaxis()->SetRangeUser(tdc_fit_llim,tdc_fit_ulim);
-    htdc_tw->Draw("hist same");
+  //   TH1D *htdc_tw = (TH1D*)f1->Get(Form("htdc_tw_set%d",set));
+  //   htdc_tw->SetLineColor(kGreen);
+  //   htdc_tw->SetTitle(Form("HCal TDC Primary Block, Primary Cluster, Set %d",set));
+  //   htdc_tw->GetXaxis()->SetRangeUser(tdc_fit_llim,tdc_fit_ulim);
+  //   htdc_tw->Draw("hist same");
 
-    //get reasonable limits on fit
-    Double_t tdc_twmin = htdc_tw->GetXaxis()->GetXmin();
-    Double_t tdc_twmax = htdc_tw->GetXaxis()->GetXmax();
-    Int_t tdc_twtotalbins = htdc_tw->GetNbinsX();
-    Int_t tdc_twbinmax = htdc_tw->GetMaximumBin();
-    Double_t tdc_twbinmaxX = tdc_twmin+tdc_twbinmax*(tdc_twmax-tdc_twmin)/tdc_twtotalbins;
-    Double_t tdc_twllim = tdc_twbinmaxX-approx_sigma;
-    Double_t tdc_twulim = tdc_twbinmaxX+approx_sigma;
-    htdc_tw->Fit("gaus","0","",tdc_twllim,tdc_twulim);
-    TF1 *fittdc_tw = htdc_tw->GetFunction("gaus");
-    Double_t fittdc_twp2 = fittdc_tw->GetParameter(2);
+  //   //get reasonable limits on fit
+  //   Double_t tdc_twmin = htdc_tw->GetXaxis()->GetXmin();
+  //   Double_t tdc_twmax = htdc_tw->GetXaxis()->GetXmax();
+  //   Int_t tdc_twtotalbins = htdc_tw->GetNbinsX();
+  //   Int_t tdc_twbinmax = htdc_tw->GetMaximumBin();
+  //   Double_t tdc_twbinmaxX = tdc_twmin+tdc_twbinmax*(tdc_twmax-tdc_twmin)/tdc_twtotalbins;
+  //   Double_t tdc_twllim = tdc_twbinmaxX-approx_sigma;
+  //   Double_t tdc_twulim = tdc_twbinmaxX+approx_sigma;
+  //   htdc_tw->Fit("gaus","0","",tdc_twllim,tdc_twulim);
+  //   TF1 *fittdc_tw = htdc_tw->GetFunction("gaus");
+  //   Double_t fittdc_twp2 = fittdc_tw->GetParameter(2);
 
-    //Add a legend
-    auto legend = new TLegend(0.43,0.7,0.89,0.89);
-    legend->SetTextSize(0.03);
-    legend->SetHeader(Form("HCal TDC Timewalk Correction SBS%d, Cal Set%d",config,set));
-    legend->AddEntry(htdc,Form("Pre-Cal, sigma:%f",fittdcp2),"l");
-    legend->AddEntry(htdc_tw,Form("Post-Cal, sigma:%f",fittdc_twp2),"l");
-    legend->Draw();
+  //   //Add a legend
+  //   auto legend = new TLegend(0.43,0.7,0.89,0.89);
+  //   legend->SetTextSize(0.03);
+  //   legend->SetHeader(Form("HCal TDC Timewalk Correction SBS%d, Cal Set%d",config,set));
+  //   legend->AddEntry(htdc,Form("Pre-Cal, sigma:%f",fittdcp2),"l");
+  //   legend->AddEntry(htdc_tw,Form("Post-Cal, sigma:%f",fittdc_twp2),"l");
+  //   legend->Draw();
 
-  }
+  // }
 
-  std::string tdc_twcomp_path = plotdir + "tdc_twcomp.png";
-  c13->SaveAs(tdc_twcomp_path.c_str());
+  // std::string tdc_twcomp_path = plotdir + "tdc_twcomp.png";
+  // c13->SaveAs(tdc_twcomp_path.c_str());
 
   /////////////////////////////////////////////////
   // Get NEV per channel per energy calibration set
@@ -988,9 +1051,16 @@ void quality_check( const char *experiment = "gmn", Int_t config = 11, Int_t pas
 
     //Invert the histogram to match geometry facing away from target
     for( Int_t i=0; i<hcal::maxHCalChan; i++ ){
-      Int_t row = (hcal::maxHCalRows-1) - i/hcal::maxHCalCols;
-      Int_t col = (hcal::maxHCalCols-1) - i%hcal::maxHCalCols;
+      Int_t row = (hcal::maxHCalRows) - i/hcal::maxHCalCols;
+      Int_t col = (hcal::maxHCalCols) - i%hcal::maxHCalCols;
 
+      // Int_t row = i/12;
+      // Int_t col = i%12;
+
+
+      // if( col==1 || col==hcal::maxHCalCols || row==1 || row==hcal::maxHCalRows )
+      // 	hNEV[set]->SetBinContent(col,row,0);
+      // else
       hNEV[set]->SetBinContent(col,row,nev[i]);
 
     }

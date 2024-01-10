@@ -43,6 +43,18 @@ namespace util {
 		   Int_t verbose,               // verbosity
 		   vector<calcut> &ccut);       // Output: Vector of ccut structs
 
+  void ReadDiagnosticCutList(std::string cutsheet_dir,    // Dir. path containing CSV files with cut info
+			     std::string experiment,      // experiment {gmn,gen,genrp,gep,etc.}
+			     Int_t sbsconfig,             // SBS configuration
+			     std::string target,          // target
+			     Int_t field,                 // sbs field in percent
+			     Int_t verbose,               // verbosity
+			     vector<caldiag> &cdcut);     // Output: Vector of ccut structs
+  
+  void diagnosticReport(const std::vector<caldiag>& data, // Vector of many caldiag objects by target/sbs-field
+			const suppset& supplement,        // Set of expermental objects to augment output
+			std::string report_path);         // Path to report file holding canvases
+
   //Geometry/physics
   void sethcalaxes( Double_t sbstheta_rad,                 //SBS arm theta in radians
 		    vector<TVector3> &hcal_axes );         //Pass 3-vector (unit) for modification in HCal coordinates
@@ -61,6 +73,59 @@ namespace util {
 		 Double_t dx,                              //Event dx
 		 Int_t &pid );                             //Modified pid(-1:neither,0:ambiguous,1:proton,2:neutron)
   
+  bool Nspotcheck(Double_t dy,                             //data dy
+		  Double_t dx,                             //data dx
+		  Double_t dy_mean,                        //mean location of nucleon dy
+		  Double_t dx_mean,                        //mean location of nucleon dx
+		  Double_t dy_sigma,                       //dy sigma of nucleon
+		  Double_t dx_sigma,                       //dx sigma of nucleon
+		  Double_t rotationAngle=0);               //rotation angle of ellipse (if ever necessary)
+
+  Double_t assignScore( Double_t val_1,                    //Cluster energy
+			Double_t val_2,                    //Cluster coin time
+			Double_t max1,                     //Max cluster energy for event
+			const vector<Double_t> &gfit );     //coin time gaussian profile 
+
+  //Histogram utility
+  Int_t get_max_bin_on_range( TH1D *h,                     //1D histogram to find max bin
+			      Double_t xlow,               //lower limit on find range
+			      Double_t xhigh );            //upper limit on find range
+
+  vector<Double_t> fitGaussianAndGetFineParams(TH1D* hist,           //1D histogram to fit
+					       Double_t sig,         //guess at std dev for course fit
+					       Double_t low,         //min limit on fit range  
+					       Double_t high);       //max limit on fit range
+
+  void sliceHisto( TH2D *h2,                               //2D histogram to slice
+		   Int_t Nslices,                          //number of x bins for slicing
+		   Double_t fwhm,                          //guess at std dev of gaus fit for preliminary fits
+		   Int_t min_ev,                           //minimum events to fit the x-cell
+		   vector<Double_t> &cell,                 //vector to store bin x values
+		   vector<Double_t> &mean,                 //vector to store mean values of fit
+		   vector<Double_t> &err,                  //vector to store std dev values of fit
+		   Double_t meanXmin,                      //hard min limit on finding mean value (if known)
+		   Double_t meanXmax);                     //hard max limit on finding mean value (if known)
+
+  void sliceHCalIDHisto( TH2D *h2,                               //2D histogram to slice
+			 Int_t Nslices,                          //number of x bins for slicing
+			 Double_t fwhm,                          //guess at std dev of gaus fit for preliminary fits
+			 Int_t min_ev,                           //minimum events to fit the x-cell
+			 TCanvas *c1,                            //Canvas to hold fits for top half cells
+			 TCanvas *c2,                           //Canvas to hold fits for bottom half cells
+			 vector<Double_t> &cell,                 //vector to store bin x values
+			 vector<Double_t> &mean,                 //vector to store mean values of fit
+			 vector<Double_t> &err,                  //vector to store std dev values of fit
+			 Double_t meanXmin,                      //hard min limit on finding mean value (if known)
+			 Double_t meanXmax);                           //Canvas to hold fits for bottom half cells
+
+  void sliceHistoFine( TH2D *h2,                           //2D histogram to slice
+		       Int_t Nslices,                      //number of x bins for slicing
+		       Double_t fwhm,                      //guess at std dev of gaus fit for preliminary fits
+		       Int_t min_ev,                       //minimum events to fit the x-cell
+		       vector<Double_t> &cell,             //vector to store bin x values
+		       vector<Double_t> &mean,             //vector to store mean values of fit
+		       vector<Double_t> &err );            //vector to store std dev values of fit
+
   //Fit functions
   Double_t g_gfit(Double_t *x, Double_t *par);
   Double_t g_gfit_bg(Double_t *x, Double_t *par);

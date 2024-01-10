@@ -516,8 +516,8 @@ Int_t clusDisplay_HCal(Int_t run = 13559, Int_t event = -1){
   if(!T) { 
     T = new TChain("T");
     //T->Add(TString::Format("%s/e1209019_%d*.root",getenv("DATA_DIR"),run));
-    //T->Add(TString::Format("/volatile/halla/sbs/seeds/rootfiles/hcal_general_%d*",run));
-    T->Add(TString::Format("/volatile/halla/sbs/seeds/rootfiles/hcal_gmn_fullreplay_%d*",run));
+    T->Add(TString::Format("/volatile/halla/sbs/seeds/rootfiles/hcal_general_%d*",run));
+    //T->Add(TString::Format("/volatile/halla/sbs/seeds/rootfiles/hcal_gmn_fullreplay_%d*",run));
     T->SetBranchStatus("*",0);
     T->SetBranchStatus("sbs.hcal.*",1);
     T->SetBranchAddress("sbs.hcal.nsamps",hcalt::nsamps);

@@ -1,14 +1,15 @@
 #!/bin/sh
 
-# SSeeds - 5.28.23 - simple shell script to run tcal.C
+# SSeeds - 9.23.23
 
 ## Usage
-#./run_timewalk.sh <string: experiment> <int: configuration> <bool: quasi-replay> <int: replay pass> <int: number of energy calibrations>
-# Note: remaining parameters should not be changed on this version of the program unless changes to code to enable their use is performed
+#./run_timewalk.sh <kine> <iter>
 
-exp=$1
-config=$2
-qreplay=$3
+exper=$1
+conf=$2
+iter=$3
 pass=$4
 
-root -l --web=off 'timewalk.C("'$exp'",'$config','$qreplay','$pass')'
+cd /w/halla-scshelf2102/sbs/seeds/HCal_replay/hcal/hcalCalibration/SBS/timing
+
+root -l -b -q 'timewalk.C("'$exper'",'$conf','$iter','$pass')'

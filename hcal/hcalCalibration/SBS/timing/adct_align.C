@@ -21,12 +21,23 @@ const Int_t first_hcal_chan = 0;
 const Int_t total_bins = 320;
 const Int_t lower_lim = -60;
 const Int_t upper_lim = 100;
+// const Int_t total_bins = 600;
+// const Int_t lower_lim = -150;
+// const Int_t upper_lim = 150;
 const Int_t fit_event_min = 50; //Minimum events in histogram to fit
 const Double_t observed_adct_sigma = 4.0; //rough estimate
+const Double_t Nsig = 2;
 const Double_t ADCt_target = 0.; //set the adc time target (ns)
 const Double_t tmax_factor = 6.; //number of sigma to consider for tmax cut on cluster elements
 const Int_t linecount = 12;
 const Int_t samples[2] = {161,80}; //Sample channels to check timing alignment over runs within calibrations set
+
+bool wonkset = false; //setup for run range exceptions
+
+bool tempfix = false; //temporary adjustment of binmaxX for large variation on small data sets
+bool channelCorrect = true; //temporary adjustment of single adct values on channel to fit in gen window
+Int_t corrChan = 264; //Channel to correct
+const Double_t tempChanOffset = 330.; //temporary offset for corrChan to return to general window
 
 void overlayWithGaussianFits(TH2D *h2d, TCanvas *canvas) {
   // switch to canvas location
@@ -96,14 +107,25 @@ void adct_align( const char *experiment = "gmn", Int_t config=4, bool qreplay = 
   std::string h2opt = "";
   if( h2only )
     h2opt = "_lh2only";
+
+  std::string wonkopt = "";
+  if( config==11 || config==14 ){
+    if( wonkset )
+      wonkopt = "_wonkset";
+    else
+      wonkopt = "_normalset";
+  }
+
   std::string outdir_path = gSystem->Getenv("OUT_DIR");
-  std::string adctalign_path = outdir_path + Form("/hcal_calibrations/pass%d/timing/adctalign%s_%s_conf%d_qr%d_pass%d.root",pass,h2opt.c_str(),experiment,config,(Int_t)qreplay,pass);
+  std::string adctalign_path = outdir_path + Form("/hcal_calibrations/pass%d/timing/adctalign%s_%s_conf%d_qr%d_pass%d%s.root",pass,h2opt.c_str(),experiment,config,(Int_t)qreplay,pass,wonkopt.c_str());
   std::string plotdir = Form("../quality_plots/%s/conf%d/",experiment,config);
 
   // offset paths and variables
-  std::string db_path = gSystem->Getenv("DB_DIR");
-  std::string new_adctoffset_path = Form("parameters/adctoffsets_class_%s_conf%d_pass%d.txt",experiment,config,pass);
-  std::string new_tmax_path = Form("parameters/adcttmax_class_%s_conf%d_pass%d.txt",experiment,config,pass);
+  //std::string db_path = gSystem->Getenv("DB_DIR");
+  std::string db_path = "/w/halla-scshelf2102/sbs/seeds/alt_sbsreplay/SBS-replay/DB";
+
+  std::string new_adctoffset_path = Form("parameters/adctoffsets_%s_conf%d_pass%d%s.txt",experiment,config,pass,wonkopt.c_str());
+  std::string new_tmax_path = Form("parameters/adcttmax_%s_conf%d_pass%d%s.txt",experiment,config,pass,wonkopt.c_str());
   std::string old_db_path = db_path + "/db_sbs.hcal.dat";
   std::string db_adctoffset_variable = "sbs.hcal.adc.timeoffset";
   std::string db_tmax_variable = "sbs.hcal.tmax";
@@ -252,6 +274,28 @@ void adct_align( const char *experiment = "gmn", Int_t config=4, bool qreplay = 
     //Get run experimental parameters
     std::string current_offset_timestamp = runs[r].adct_ts;
     Int_t current_runnumber = runs[r].runnum;
+
+    //cout << wonkset << " " << current_runnumber << endl;
+
+    //TEMPORARY FIX for pass2 to account for timing shift
+    if( config==11 ){
+      if( wonkset ){
+    	if( current_runnumber<12450 || current_runnumber>12860 )
+    	  continue;
+      }else{
+    	if( current_runnumber>12450 && current_runnumber<12860 )
+	  //cout << current_runnumber << endl;
+    	  continue;
+      }
+    }else if( config==14 ){
+      if( wonkset ){
+    	if( current_runnumber>13260 )
+    	  continue;
+      }else{
+    	if( current_runnumber<13260 )
+    	  continue;
+      }
+    }
 
     std::string current_target = runs[r].target;
     std::string targ_uppercase = current_target; transform(targ_uppercase.begin(), targ_uppercase.end(), targ_uppercase.begin(), ::toupper );
@@ -444,7 +488,7 @@ void adct_align( const char *experiment = "gmn", Int_t config=4, bool qreplay = 
     //Main loop over events in run
     while (C->GetEntry(nevent++)) {
 
-      cout << "Analyzing run " << current_runnumber << ": " <<  nevent << "/" << nevents << " \r";
+      cout << "Analyzing run (" << r << "/" << nruns << ") " << current_runnumber << ": " <<  nevent << "/" << nevents << " \r";
       cout.flush();
 
       ///////
@@ -520,8 +564,15 @@ void adct_align( const char *experiment = "gmn", Int_t config=4, bool qreplay = 
       Double_t adct_tc = hcalatime-HODOtmean; //Primary cluster, primary block tdc with trigger correction (ns)
 
       //Fill primary timing alignment histogram. Will use hodoscope corrected time for cancellation with BBCal atime later
-      hap_hodocorr_ID[Ncal_set_idx]->Fill( pblkid, adct_tc );
+      //hap_hodocorr_ID[Ncal_set_idx]->Fill( pblkid, adct_tc );
       
+      //Correct channel way out of window 
+      if(pblkid==corrChan&&channelCorrect){
+	hap_hodocorr_ID[Ncal_set_idx]->Fill( pblkid, adct_tc+tempChanOffset );
+      }else{
+	hap_hodocorr_ID[Ncal_set_idx]->Fill( pblkid, adct_tc );
+      }
+
       //Fill single channel histograms for comparison over many runs
       if(pblkid==samples[0])
 	hadct_samp1_run[Ncal_set_idx]->Fill(current_runnumber,hcalatime);
@@ -537,21 +588,21 @@ void adct_align( const char *experiment = "gmn", Int_t config=4, bool qreplay = 
 	hadctblk[Ncal_set_idx]->Fill(blkatime);
       }
 
-      pblkid_out = pblkid;
-      tdc_out = cblktime[0];
-      atime_out = hcalatime;
-      atime_hc_out = hcalatime-HODOtmean;
-      atime_bc_out = hcalatime-BBps_atime;
-      hcale_out = HCALe;
-      dx_out = dx;
-      dy_out = dy;
-      W2_out = W2;
-      Q2_out = Q2;
-      nblk_out = nblk;   
-      mag_out = mag;
-      run_out = current_runnumber;
-      tar_out = target_index;
-      hodotmean_out = HODOtmean;
+      // pblkid_out = pblkid;
+      // tdc_out = cblktime[0];
+      // atime_out = hcalatime;
+      // atime_hc_out = hcalatime-HODOtmean;
+      // atime_bc_out = hcalatime-BBps_atime;
+      // hcale_out = HCALe;
+      // dx_out = dx;
+      // dy_out = dy;
+      // W2_out = W2;
+      // Q2_out = Q2;
+      // nblk_out = nblk;   
+      // mag_out = mag;
+      // run_out = current_runnumber;
+      // tar_out = target_index;
+      // hodotmean_out = HODOtmean;
 
       P->Fill();
 	  
@@ -561,6 +612,8 @@ void adct_align( const char *experiment = "gmn", Int_t config=4, bool qreplay = 
     C->Reset();
 
   }//endloop over runs
+
+  cout << "Ended loop over events. Proceeding to fits.." << endl;
 
   // Declare canvas and graph for plots
   TCanvas *ADCt_top[Ncal_set_size];
@@ -684,8 +737,8 @@ void adct_align( const char *experiment = "gmn", Int_t config=4, bool qreplay = 
     ADCt_all[set]->Write();
 
     for(Int_t c=0; c<hcal::maxHCalChan; c++){
-      tcvalw[Ncal_set_size][c] = 0.;
-      tcerr[Ncal_set_size][c] = 0.;
+      tcvalw[set][c] = 0.;
+      tcerr[set][c] = 0.;
 
       Int_t half_chan = hcal::maxHCalChan/2;
 
@@ -705,31 +758,52 @@ void adct_align( const char *experiment = "gmn", Int_t config=4, bool qreplay = 
       Int_t sliceN = tcellslice[set][c]->GetEntries();
       Int_t binmax = tcellslice[set][c]->GetMaximumBin();
       Double_t binmaxX = lower_lim+binmax*(upper_lim-lower_lim)/total_bins;
+
+      //TEMPORARY FIX
+      if(binmaxX>1&&binmaxX<20&&tempfix)
+	binmaxX=48;
+
       Double_t binmaxY = tcellslice[set][c]->GetBinContent(binmax);
-      tfitl = binmaxX - 4*observed_adct_sigma;
-      tfith = binmaxX + 4*observed_adct_sigma;
-      
+      tfitl = binmaxX - Nsig*observed_adct_sigma;
+      tfith = binmaxX + Nsig*observed_adct_sigma;
+
       if( sliceN<fit_event_min || binmaxX<=lower_lim || binmaxX>=upper_lim ){
 	tcellslice[set][c]->Draw();
+	tcellslice[set][c]->SetLineColor(kRed);
 	continue;
       }
 
-      TF1 *gausfit = new TF1("gausfit",util::g_gfit_bg,tfitl,tfith,5);
+      //TF1 *gausfit = new TF1("gausfit",util::g_gfit_bg,tfitl,tfith,5);
+      TF1 *gausfit = new TF1("gausfit","gaus",tfitl,tfith);
       gausfit->SetLineWidth(4);
+      gausfit->SetLineColor(kGreen);
       gausfit->SetParameter(0,binmaxY);
       gausfit->SetParameter(1,binmaxX);
       gausfit->SetParLimits(1,tfitl,tfith);
       gausfit->SetParameter(2,observed_adct_sigma);
       gausfit->SetParLimits(2,1.,3*observed_adct_sigma);
-      gausfit->SetParameter(3,25);
-      gausfit->SetParLimits(3,0,200);
+      //gausfit->SetParameter(3,25);
+      //gausfit->SetParLimits(3,0,200);
 
       tcellslice[set][c]->Fit("gausfit","RBMQ");
       tcellslice[set][c]->Draw();
       
-      tcval[set][c] = gausfit->GetParameter(1);
       tcvalw[set][c] = gausfit->GetParameter(1);
       tcerr[set][c] = gausfit->GetParameter(2);
+
+      //Catch bad fits on very small data sets      
+      if( gausfit->GetParameter(1)>tfith || gausfit->GetParameter(1)<tfitl ){
+	tcval[set][c] = binmaxX;
+	gausfit->SetLineColor(kRed);
+      }else{
+	tcval[set][c] = gausfit->GetParameter(1);
+      }
+	
+      //finish correction of channel well out of window
+      if(c==corrChan&&channelCorrect)
+	tcval[set][c] = gausfit->GetParameter(1) - tempChanOffset;
+
+      //Write histogram
       tcellslice[set][c]->SetTitle(Form("Set:%d N:%d MaxX:%f Mean:%f Sigma:%f",set,sliceN,binmaxX,tcval[set][c],tcerr[set][c]));    
       tcellslice[set][c]->Write();
 
@@ -741,17 +815,17 @@ void adct_align( const char *experiment = "gmn", Int_t config=4, bool qreplay = 
     ADCt_bot[set]->Write();
 
     if( !qreplay ){
-      std::string qplotpath_blkall = plotdir + Form("adct_tmax_set%d.png",set);
-      std::string qplotpath_all = plotdir + Form("adct_tcut_set%d.png",set);
-      std::string qplotpath_top = plotdir + Form("adct_fit_top_set%d.png",set);
-      std::string qplotpath_bot = plotdir + Form("adct_fit_bot_set%d.png",set);
+      std::string qplotpath_blkall = plotdir + Form("adct_tmax_set%d%s.png",set,wonkopt.c_str());
+      std::string qplotpath_all = plotdir + Form("adct_tcut_set%d%s.png",set,wonkopt.c_str());
+      std::string qplotpath_top = plotdir + Form("adct_fit_top_set%d%s.png",set,wonkopt.c_str());
+      std::string qplotpath_bot = plotdir + Form("adct_fit_bot_set%d%s.png",set,wonkopt.c_str());
       ADCtblk_all[set]->SaveAs(qplotpath_blkall.c_str());
       //ADCt_all[set]->SaveAs(qplotpath_all.c_str());
       ADCt_top[set]->SaveAs(qplotpath_top.c_str());
       ADCt_bot[set]->SaveAs(qplotpath_bot.c_str());
     }else{
-      std::string samp1plotpath = plotdir + Form("samp1_run_set%d.png",set);
-      std::string samp2plotpath = plotdir + Form("samp2_run_set%d.png",set);
+      std::string samp1plotpath = plotdir + Form("samp1_run_set%d%s.png",set,wonkopt.c_str());
+      std::string samp2plotpath = plotdir + Form("samp2_run_set%d%s.png",set,wonkopt.c_str());
       samp1_run[set]->SaveAs(samp1plotpath.c_str());
       samp2_run[set]->SaveAs(samp2plotpath.c_str());
     } 	
@@ -813,6 +887,22 @@ void adct_align( const char *experiment = "gmn", Int_t config=4, bool qreplay = 
       writeParFile << endl;
     }  // endloop over rows 
     writeParFile << endl << endl;
+
+    cell = 0;
+
+    writeParFile << "(inverted) " << db_adctoffset_variable << " =" << endl;
+    for( Int_t r = 0; r<hcal::maxHCalRows; r++){
+      for( Int_t c = 0; c<hcal::maxHCalCols; c++){
+	if( tcval[set][cell]==0 || abs(tcerr[set][cell])<0.05 ){ //This will only work if most channels are closely aligned already and oldtdcoffsets aren't believable
+	  writeParFile << tcval_avg[set] - adct_cal[set].old_param[cell] - ADCt_target << " ";
+	}else{
+	  writeParFile << tcval[set][cell] - adct_cal[set].old_param[cell] - ADCt_target << " ";
+	}
+	cell++;
+      } // endloop over columns 
+      writeParFile << endl;
+    }  // endloop over rows 
+    writeParFile << endl << endl;
       
   } //endloop over calibration sets
 
@@ -853,7 +943,7 @@ void adct_align( const char *experiment = "gmn", Int_t config=4, bool qreplay = 
       target_option = "LH2";
     std::string report[linecount] = {
       "General ADCt Alignment Info",
-      Form("Experiment: %s, Configuration: %d, Pass: %d", experiment, config, pass),
+      Form("Experiment: %s, Configuration: %d %s, Pass: %d", experiment, config, wonkopt.c_str(), pass),
       Form("Creation Date: %s", date.c_str() ),
       Form("Target(s) Used: %s", target_option.c_str() ),
       Form("Calibration Set: %s", adct_cal[s].timestamp.c_str() ),
@@ -882,6 +972,8 @@ void adct_align( const char *experiment = "gmn", Int_t config=4, bool qreplay = 
 
   fout->Write();
   st->Stop();
+
+  cout << "Analysis and fits written to " << adctalign_path << endl;
 
   // Send time efficiency report to console
   cout << "CPU time elapsed = " << st->CpuTime() << " s = " << st->CpuTime()/60.0 << " min. Real time = " << st->RealTime() << " s = " << st->RealTime()/60.0 << " min." << endl;

@@ -28,9 +28,16 @@ const Double_t start_dx = -4.;
 const Double_t end_dx = 3.;
 const Double_t start_dy = -1.25;
 const Double_t end_dy = 1.25;
-const Double_t bins_SFE = 400;
-const Double_t start_SFE = 0.;
-const Double_t end_SFE = 1.0;
+const Double_t bins_E = 400;
+const Double_t start_E = 0.;
+//const Double_t end_E = 1.0;
+//const Double_t end_E = 1.8; //for now comment in for SBS11
+const Double_t end_E = 1.4; //for now comment in for SBS7
+const Double_t bins_SF = 400;
+const Double_t start_SF = 0.;
+const Double_t end_SF = 0.4;
+const Double_t bins_pC = 400;
+const Double_t start_pC = 0.;
 const Double_t end_pC = 1.0/0.0017; //estimated range from cosmic gain coefficient
 const Int_t linecount = 25;
 const Int_t atimeNsig = 6;
@@ -100,7 +107,7 @@ void overlayWithGaussianFits(TH2D* hist, TCanvas* canvas, bool pCopt, const std:
       TGraphErrors* currentGraph = graph;
       Int_t binXval = hist->GetXaxis()->GetBinCenter(binX);
 
-      cout << "binXval: " << binXval << endl;
+      //cout << "binXval: " << binXval << endl;
 
       if (std::find(redBins.begin(), redBins.end(), binXval) != redBins.end()) {
 	currentGraph = redGraph;
@@ -134,7 +141,7 @@ void overlayWithGaussianFits(TH2D* hist, TCanvas* canvas, bool pCopt, const std:
 //For the first set from a given kinematic, pass "none" to avoid any runs from additional sets
 
 void qreplay_standalone( const char *experiment = "gmn", 
-			 Int_t config = 11, 
+			 Int_t config = 8, 
 			 Int_t pass = 1,  
 			 const char *sts = "", //if entire set should be analyzed with new gain parameters, pass the argument ""
 			 const char *rexperiment = "gmn", 
@@ -181,8 +188,6 @@ void qreplay_standalone( const char *experiment = "gmn",
   Int_t nruns = -1; //Analyze all available runs for this configuration
   Int_t verb = 0; //Don't print diagnostic info by default
 
-  cout << "GOT HERE" << endl;
-
   //read the run list to parse run numbers associated to input parameters and set up for loop over runs
   vector<calrun> runs; 
   util::ReadRunList(struct_dir,experiment,nruns,config,pass,verb,runs); //nruns=-1 modifies nruns to loop over all available
@@ -209,63 +214,63 @@ void qreplay_standalone( const char *experiment = "gmn",
   //Add quality plots   
   TH1D * hE_old_nocut = new TH1D("hE_old_nocut",
 				 "HCal Primary Cluster E, Old Coeff, No Elastic Cuts; GeV",
-				 bins_SFE,
-				 start_SFE,
-				 end_SFE);
+				 bins_E,
+				 start_E,
+				 end_E);
 
   TH1D * hE_old = new TH1D("hE_old",
 			   "HCal Primary Cluster E, Old Coeff, Elastic Cuts; GeV",
-			   bins_SFE,
-			   start_SFE,
-			   end_SFE);
+			   bins_E,
+			   start_E,
+			   end_E);
 
   TH1D * hpC_nocut = new TH1D("hpC_old_nocut",
 				 "HCal Primary Cluster pC, No Coeff, No Elastic Cuts; GeV",
-				 bins_SFE,
-				 start_SFE,
-				 end_SFE);
+				 bins_pC,
+				 start_pC,
+				 end_pC);
 
   TH1D * hpC = new TH1D("hpC_old",
 			   "HCal Primary Cluster pC, No Coeff, Elastic Cuts; GeV",
-			   bins_SFE,
-			   start_SFE,
-			   end_SFE);
+			   bins_pC,
+			   start_pC,
+			   end_pC);
 
   TH1D * hE_new_nocut = new TH1D("hE_new_nocut",
 				 "HCal Primary Cluster E, New Coeff, No Elastic Cuts; GeV",
-				 bins_SFE,
-				 start_SFE,
-				 end_SFE);
+				 bins_E,
+				 start_E,
+				 end_E);
 
   TH1D * hE_new = new TH1D("hE_new",
 			   "HCal Primary Cluster E, New Coeff, Elastic Cuts; GeV",
-			   bins_SFE,
-			   start_SFE,
-			   end_SFE);
+			   bins_E,
+			   start_E,
+			   end_E);
     
   TH1D * hSF_old_nocut = new TH1D("hSF_old_nocut",
 				 "HCal Primary Cluster SF, Old Coeff, No Elastic Cuts; GeV",
-				 bins_SFE,
-				 start_SFE,
-				 end_SFE);
+				 bins_SF,
+				 start_SF,
+				 end_SF);
 
   TH1D * hSF_old = new TH1D("hSF_old",
 			   "HCal Primary Cluster SF, Old Coeff, Elastic Cuts; GeV",
-			   bins_SFE,
-			   start_SFE,
-			   end_SFE);
+			   bins_SF,
+			   start_SF,
+			   end_SF);
 
   TH1D * hSF_new_nocut = new TH1D("hSF_new_nocut",
 				 "HCal Primary Cluster SF, New Coeff, No Elastic Cuts; GeV",
-				 bins_SFE,
-				 start_SFE,
-				 end_SFE);
+				 bins_SF,
+				 start_SF,
+				 end_SF);
 
   TH1D * hSF_new = new TH1D("hSF_new",
 			   "HCal Primary Cluster SF, New Coeff, Elastic Cuts; GeV",
-			   bins_SFE,
-			   start_SFE,
-			   end_SFE);
+			   bins_SF,
+			   start_SF,
+			   end_SF);
 
   TH2D *hdxvmag_h = new TH2D("hdxvmag_h",
 			     "dx vs magnetic field lh2",
@@ -326,45 +331,45 @@ void qreplay_standalone( const char *experiment = "gmn",
 			hcal::maxHCalRows,
 			hcal::posHCalXi,
 			hcal::posHCalXf,
-			bins_SFE,
-			start_SFE,
-			end_SFE);
+			bins_E,
+			start_E,
+			end_E);
    
   TH2D *hEvY = new TH2D("hEvY",
 			"HCal energy vs HCal Y",
 			hcal::maxHCalRows,
 			hcal::posHCalYi,
 			hcal::posHCalYf,
-			bins_SFE,
-			start_SFE,
-			end_SFE);
+			bins_E,
+			start_E,
+			end_E);
 
   TH2D *hSFvID = new TH2D("hSFvID",
 			  "sampling fraction vs ID",
 			  hcal::maxHCalChan,
 			  hcal_first_channel,
 			  hcal::maxHCalChan,
-			  bins_SFE,
-			  start_SFE,
-			  end_SFE);
+			  bins_SF,
+			  start_SF,
+			  end_SF);
 
   TH2D *hSFvrow = new TH2D("hSFvrow",
 			   "sampling fraction vs row",
 			   hcal::maxHCalRows,
 			   hcal_first_channel,
 			   hcal::maxHCalRows,
-			   bins_SFE,
-			   start_SFE,
-			   end_SFE);
+			   bins_SF,
+			   start_SF,
+			   end_SF);
 
   TH2D *hSFvcol = new TH2D("hSFvcol",
 			   "sampling fraction vs col",
 			   hcal::maxHCalCols,
 			   hcal_first_channel,
 			   hcal::maxHCalCols,
-			   bins_SFE,
-			   start_SFE,
-			   end_SFE);
+			   bins_SF,
+			   start_SF,
+			   end_SF);
 
   TH2D *hap_hodocorr_ID = new TH2D("hap_hodocorr_ID",
 				   "adct hodoscope corrected vs ID",
@@ -400,9 +405,9 @@ void qreplay_standalone( const char *experiment = "gmn",
 				(runs[nruns-1].runnum+1) - (runs[0].runnum-1),
 				runs[0].runnum-1,
 				runs[nruns-1].runnum+1,
-				bins_SFE,
-				start_SFE,
-				end_SFE);
+				bins_E,
+				start_E,
+				end_E);
 
 
   TH2D *hE_old_run = new TH2D("hE_old_run",
@@ -410,9 +415,9 @@ void qreplay_standalone( const char *experiment = "gmn",
 			  (runs[nruns-1].runnum+1) - (runs[0].runnum-1),
 			  runs[0].runnum-1,
 			  runs[nruns-1].runnum+1,
-			  bins_SFE,
-			  start_SFE,
-			  end_SFE);
+			  bins_E,
+			  start_E,
+			  end_E);
 
 
 
@@ -421,9 +426,9 @@ void qreplay_standalone( const char *experiment = "gmn",
 			  (runs[nruns-1].runnum+1) - (runs[0].runnum-1),
 			  runs[0].runnum-1,
 			  runs[nruns-1].runnum+1,
-			  bins_SFE,
-			  start_SFE,
-			  end_SFE);
+			  bins_E,
+			  start_E,
+			  end_E);
 
 
   TH2D *hpC_run = new TH2D("hpC_run",
@@ -431,8 +436,8 @@ void qreplay_standalone( const char *experiment = "gmn",
 			  (runs[nruns-1].runnum+1) - (runs[0].runnum-1),
 			  runs[0].runnum-1,
 			  runs[nruns-1].runnum+1,
-			  bins_SFE,
-			  start_SFE,
+			  bins_pC,
+			  start_pC,
 			  end_pC);
 
     
@@ -505,8 +510,14 @@ void qreplay_standalone( const char *experiment = "gmn",
   Double_t config_e_sigma_ratio;
   std::string ts_compare = "";
   bool first = true;
+  bool cut_first = true;
   std::vector<Int_t> lh2runs;
-
+  
+  //TEST
+  vector<int> elastics_per_run;
+  vector<int> elastic_runs;
+  int total_elastics_allruns = 0;
+  
   //Main loop over runs
   for (Int_t r=0; r<nruns; r++) {
     bool ts_different = false;
@@ -643,7 +654,14 @@ void qreplay_standalone( const char *experiment = "gmn",
     //Get available cuts for current config/target/field combination. Set index = 0 as no calibration is being done here and physics cuts do not vary by calibration set
     vector<calcut> cut;
     util::ReadCutList(struct_dir,experiment,config,0,pass,current_target,mag,verb,cut);
-    
+    if( cut_first ){
+      std::cout << cut[0];
+      cut_first = false;
+    }
+
+    //TEST
+    elastic_runs.push_back(current_runnumber);
+
     // Setting up chain and branch addresses
     C = new TChain("T");
     C->Add(rootfile_path.c_str());
@@ -756,12 +774,16 @@ void qreplay_standalone( const char *experiment = "gmn",
 
     long nevent = 0, nevents = C->GetEntries(); 
     Int_t treenum = 0, currenttreenum = 0;
+    
+    //TEST
+    int total_elastics = 0;
 
     //Main loop over events in run
     while (C->GetEntry(nevent++)) {
 
       cout << "Analyzing " << current_target << " run " << current_runnumber << ": " <<  nevent << "/" << nevents << " \r";
       cout.flush();
+
 
       ///////
       //Single-loop elastic globalcut method. Save pass/fail for output tree.
@@ -946,6 +968,10 @@ void qreplay_standalone( const char *experiment = "gmn",
       if( failedglobal || failedactivearea || failedcoin || faileddy || pid==-1 || failedW2 )
 	continue;
 
+      //TEST
+      total_elastics++;
+      total_elastics_allruns++;
+
       if(pblkid==samples[0])
 	hadct_samp1_run->Fill(current_runnumber,natime);
       if(pblkid==samples[1])
@@ -970,6 +996,9 @@ void qreplay_standalone( const char *experiment = "gmn",
      
 
     }//endloop over events
+
+    //TEST
+    elastics_per_run.push_back(total_elastics);
 
     // getting ready for the next run
     C->Reset();
@@ -1036,6 +1065,21 @@ void qreplay_standalone( const char *experiment = "gmn",
   fout->Write();
 
   st->Stop();
+
+  //TEST
+  if( elastics_per_run.size() != elastic_runs.size() ){
+    cout << "TEST ERROR: vector size mismatch" << endl;
+    return;
+  }
+
+  //TEST
+  for( int i=0; i<elastic_runs.size(); i++ ){
+    cout << "run:" << elastic_runs[i] << "  events: " << elastics_per_run[i] << endl;
+
+  }
+  cout << "Total elastics: " << total_elastics_allruns << endl;
+
+  cout << endl << "Output file written to " << qr_path << endl;
 
   // Send time efficiency report to console
   cout << "CPU time elapsed = " << st->CpuTime() << " s = " << st->CpuTime()/60.0 << " min. Real time = " << st->RealTime() << " s = " << st->RealTime()/60.0 << " min." << endl;    

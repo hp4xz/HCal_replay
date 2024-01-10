@@ -5,6 +5,7 @@ namespace hcal {
   //Beam energy in GeV
   Double_t ebeam(std::string experiment,Int_t config) {
     if( experiment.compare("gmn")==0 ){
+
       if(config==1)
 	return 1.916;
       else if(config==4)
@@ -27,8 +28,18 @@ namespace hcal {
 	return 4.0268;
       else if(config==4363)
 	return 6.373;
+
     }else if( experiment.compare("gen")==0 ){ //This section to be finished as new experiments are performed
-      return -1;
+      
+      if(config==1)
+	return 4.291;
+      if(config==2)
+	return 4.291;
+      if(config==3)
+	return 6.373;
+      if(config==4||config==45)
+	return 8.4;
+
     }else{
       std::cerr << "Error: enter a valid SBS configuration." << std::endl;
       return -1;
@@ -39,6 +50,7 @@ namespace hcal {
   //Angle of the BigBite (electron) arm wrt exit beamline in degrees
   Double_t bbtheta(std::string experiment,Int_t config){
     if( experiment.compare("gmn")==0 ){
+
       if(config==1)
 	return 51.0;
       else if(config==4)
@@ -55,8 +67,16 @@ namespace hcal {
 	return 49.0;
       else if(config==4363)
 	return 36.5;
+
     }else if( experiment.compare("gen")==0 ){ //This section to be finished as new experiments are performed
-      return -1;
+      
+      if(config==2||config==1)
+	return 29.5;
+      else if(config==3)
+	return 36.5;
+      else if(config==4||config==45)
+	return 35;
+
     }else{
       std::cerr << "Error: enter a valid SBS configuration." << std::endl;
       return -1;
@@ -67,6 +87,7 @@ namespace hcal {
   //Distance from the target to the BigBite magnet in m
   Double_t bbdist(std::string experiment,Int_t config){
     if( experiment.compare("gmn")==0 ){
+
       if(config==1)
 	return 1.8518;
       else if(config==4)
@@ -83,8 +104,12 @@ namespace hcal {
 	return 1.550;
       else if(config==4363)
 	return 1.63;
+
     }else if( experiment.compare("gen")==0 ){ //This section to be finished as new experiments are performed
-      return -1;
+      
+      if(config==2||config==3||config==4||config==1||config==45)
+	return 1.63; 
+
     }else{
       std::cerr << "Error: enter a valid SBS configuration." << std::endl;
       return -1;
@@ -95,6 +120,7 @@ namespace hcal {
   //Angle of the SBS magnet (in hadron arm) wrt exit beamline in degrees
   Double_t sbstheta(std::string experiment,Int_t config){
     if( experiment.compare("gmn")==0 ){
+
       if(config==1)
 	return 33.5;
       else if(config==4)
@@ -111,8 +137,16 @@ namespace hcal {
 	return 22.5;
       else if(config==4363)
 	return 22.1;
+
     }else if( experiment.compare("gen")==0 ){ //This section to be finished as new experiments are performed
-      return -1;
+      
+      if(config==2||config==1)
+	return 34.7;
+      else if(config==3)
+	return 22.1;
+      else if(config==4||config==45)
+	return 18;
+
     }else{
       std::cerr << "Error: enter a valid SBS configuration." << std::endl;
       return -1;
@@ -123,13 +157,18 @@ namespace hcal {
   //Distance from target to the SBS magnet in m
   Double_t sbsdist(std::string experiment,Int_t config){
     if( experiment.compare("gmn")==0 ){
+      
       if(config==1||config==4||config==7||config==11
 	 ||config==14||config==8||config==9)
 	return 2.25;
       else if(config==4363)
 	return 2.8;
+
     }else if( experiment.compare("gen")==0 ){ //This section to be finished as new experiments are performed
-      return -1;
+      
+      if(config==45||config==1||config==2||config==3||config==4)
+	return 2.8;
+
     }else{
       std::cerr << "Error: enter a valid SBS configuration." << std::endl;
       return -1;
@@ -140,6 +179,7 @@ namespace hcal {
   //Distance from target to the hadron calorimeter in m
   Double_t hcaldist(std::string experiment,Int_t config){
     if( experiment.compare("gmn")==0 ){
+      
       if(config==1)
 	return 13.5;
       else if(config==4||config==8||config==9)
@@ -150,8 +190,12 @@ namespace hcal {
 	return 14.5;
       else if(config==4363)
 	return 17.0;
+
     }else if( experiment.compare("gen")==0 ){ //This section to be finished as new experiments are performed
-      return -1;
+     
+      if(config==45||config==1||config==2||config==3||config==4)
+	return 17;
+
     }else{
       std::cerr << "Error: enter a valid SBS configuration." << std::endl;
       return -1;
@@ -162,6 +206,7 @@ namespace hcal {
   //Angle hadron calorimeter makes wrt exit beamline in degrees
   Double_t hcaltheta(std::string experiment,Int_t config){
     if( experiment.compare("gmn")==0 ){
+
       if(config==1)
 	return 33.5;
       else if(config==4)
@@ -178,8 +223,16 @@ namespace hcal {
 	return 22.0;
       else if(config==4363)
 	return 21.6;
+
     }else if( experiment.compare("gen")==0 ){ //This section to be finished as new experiments are performed
-      return -1;
+
+      if(config==1||config==2)
+	return 34.7;
+      else if(config==3)
+	return 21.6;
+      else if(config==45||config==4)
+	return 18;
+
     }else{
       std::cerr << "Error: enter a valid SBS configuration." << std::endl;
       return -1;
@@ -190,24 +243,35 @@ namespace hcal {
   //Timestamp for each configuration
   std::string sbsts(std::string experiment,Int_t config){
     if( experiment.compare("gmn")==0 ){
+
       if(config==1)
 	return "none";
       else if(config==4)
-	return "--------[ 2021-10-21 00:00:00 ]";
+	return "--------[ 2021-10-18 05:30:00 ]";
       else if(config==7)
-	return "--------[ 2021-11-13 00:00:00 ]";
+	return "--------[ 2021-11-08 17:00:00 ]";
       else if(config==11)
-	return "--------[ 2021-11-25 00:00:00 ]";
+	return "--------[ 2021-11-17 08:00:00 ]";
       else if(config==14)
-	return "--------[ 2022-01-12 00:00:00 ]";
+	return "--------[ 2022-01-10 22:30:00 ]";
       else if(config==8)
-	return "--------[ 2022-01-22 00:00:00 ]";
+	return "--------[ 2022-01-20 07:30:00 ]";
       else if(config==9)
-	return "--------[ 2022-02-02 00:00:00 ]";
+	return "--------[ 2022-02-01 17:42:00 ]";
       else if(config==4363)
-	return "--------[ 2021-10-21 00:00:00 ]";
+	return "-------[ 2021-10-10 00:00:00 ]";
+
     }else if( experiment.compare("gen")==0 ){ //This section to be finished as new experiments are performed
-      return "";
+     
+      if(config==1||config==2)
+	return "--------[ 2022-10-17 00:00:00 ]";
+      else if(config==3)
+	return "--------[ 2022-11-11 00:00:00 ]";
+      else if(config==4)
+	return "--------[ 2023-01-15 00:00:00 ]";
+      else if(config==45)
+	return "--------[ 2023-09-01 00:00:00 ]";
+
     }else{
       std::cerr << "Error: enter a valid SBS configuration." << std::endl;
       return "";

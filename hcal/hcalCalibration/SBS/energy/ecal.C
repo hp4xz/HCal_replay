@@ -1,4 +1,4 @@
-//SSeeds 5.15.23 - Script adapted from ecal.C at https://github.com/sebastianseeds/HCal_replay to calibrate energy with elastic events from all available data. Assumes tdc/adct alignment scripts have been written and new alignments are available. Check sbs.h for class details.
+//SSeeds 5.15.23 - Script adapted from ecal.C at https://github.com/sebastianseeds/HCal_replay to calibrate energy with elastic events from all available data. Assumes tdc/adct alignment scripts have been written and new alignments are available. Check sbs.h for class details. Updated to include rootfile directory and hcal vertical offset in runlist csv
 //NOTE: This script is configured to calibrate by configuration/kinematic. One could, in principle, calibrate the energy over all configurations. This method is chosen to be sensitive to expected changes in hcal sampling fraction and E/sigma ratios prediced by MC. Timestamps are dynamically handled to address mismatches. Any timestamps occurring within a configuration are assumed to be hardware/HV related and will result in multiple calibration sets for that configuration.
 //ADDITIONAL NOTE: requires $DB_DIR and $OUT_DIR paths set correctly in current environment and DB directory structure to match the github model from SBS-replay.
 
@@ -32,12 +32,17 @@ const Double_t start_dy = -1.25;
 const Double_t end_dy = 1.25;
 const Double_t bins_SFE = 400;
 const Double_t start_SFE = 0.;
-const Double_t end_SFE = 1.;
+const Double_t end_SFE = 1.4;
+const Double_t bins_coin = 200;
+const Double_t start_coin = -50.;
+const Double_t end_coin = 50.;
 const Int_t linecount = 25;
-const Int_t atimeNsig = 6;
+const Int_t atimeNsig = 2;
+
+bool altpath = false; //Added for manual paths
 
 //Main <experiment> <configuration> <quasi-replay-option> <replay-pass> <target-option>; qreplay should only be performed after new offsets obtained
-void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = false, Int_t pass = 0, bool h2only = true ){
+void ecal( const char *experiment = "gmn", Int_t config = 7, bool qreplay = false, Int_t pass = 2, bool h2only = true, bool new_atime = false, bool verbose = true ){
   
   // Define a clock to check macro processing time
   TStopwatch *st = new TStopwatch();
@@ -53,10 +58,16 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
   std::string outdir_path = gSystem->Getenv("OUT_DIR");
   std::string ecal_path = outdir_path + Form("/hcal_calibrations/pass%d/energy/ecal%s_%s_conf%d_qr%d_pass%d.root",pass,h2opt.c_str(),experiment,config,(Int_t)qreplay,pass);
 
+  if(altpath)
+    ecal_path = outdir_path + Form("/hcal_calibrations/pass%d/energy/ecal_newclus_%s_%s_conf%d_qr%d_pass%d.root",pass,h2opt.c_str(),experiment,config,(Int_t)qreplay,pass);
+
   //Set up path variables and output files
   string db_path = gSystem->Getenv("DB_DIR");
   TFile *fout = new TFile( ecal_path.c_str(), "RECREATE" );
   std::string new_adcgain_path = Form("parameters/adcgaincoeff_%s%s_conf%d_pass%d.txt",experiment,h2opt.c_str(),config,pass);
+
+  if(altpath)
+    new_adcgain_path = Form("parameters/adcgaincoeff_newclus%s%s_conf%d_pass%d.txt",experiment,h2opt.c_str(),config,pass);
 
   // Get information from .csv files
   std::string struct_dir = Form("../config/%s/",experiment); //unique to my environment for now
@@ -153,13 +164,21 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
   Double_t sbsdist = config_parameters.GetSBSdist();
   Double_t bbtheta_rad = config_parameters.GetBBtheta_rad(); //in radians
   std::string sbs_timestamp = config_parameters.GetSBSTimestamp();
+  // Double_t hcal_v_offset;
+  // if( pass>1 )
+  //   hcal_v_offset = hcal::HCalvoff_p2;
+  // else
+  //   hcal_v_offset = hcal::HCalvoff;
 
   //Add quality plots
   //Declare histograms for modification later where additional calibration sets are necessary
+  TH1D *hcoin[hcal::gNstamp];
+
   TH1D *hE[hcal::gNstamp];
   TH1D *hEblk[hcal::gNstamp];
   TH1D *hSF[hcal::gNstamp];
 
+  TH2D *hXY[hcal::gNstamp];
   TH2D *hdxvmag_h[hcal::gNstamp];
   TH2D *hdyvmag_h[hcal::gNstamp];
   TH2D *hdxvmag_d[hcal::gNstamp];
@@ -179,6 +198,12 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
 		       bins_SFE,
 		       start_SFE,
 		       end_SFE);
+    
+    hcoin[set] = new TH1D(Form("hcoin_set%d",set),
+		       "null",
+		       bins_coin,
+		       start_coin,
+		       end_coin);
 
     hEblk[set] = new TH1D(Form("hEblk_set%d",set),
 			  "null",
@@ -191,6 +216,15 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
 			bins_SFE,
 			start_SFE,
 			end_SFE);
+
+    hXY[set] = new TH2D(Form("hXY_set%d",set),
+			      "null",
+			      600,
+			      -3,
+			      3,
+			      600,
+			      -3,
+			      3);
 
     hdxvmag_h[set] = new TH2D(Form("hdxvmag_h_set%d",set),
 			      "null",
@@ -299,6 +333,13 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
   Double_t config_e_sigma_ratio;
   bool first = true;
   Double_t test_adcg_coeff[hcal::maxHCalChan] = {1.};
+      
+  long postcut1_nevent[hcal::gNstamp] = {0}, postcut2_nevent[hcal::gNstamp] = {0}, postcut3_nevent[hcal::gNstamp] = {0}, postcut4_nevent[hcal::gNstamp] = {0}, postcut5_nevent[hcal::gNstamp] = {0}, postcut6_nevent[hcal::gNstamp] = {0};
+
+  //TEST
+  vector<int> elastics_per_run;
+  vector<int> elastic_runs;
+  int total_elastics_allruns = 0;
 
   //Main loop over runs
   for (Int_t r=0; r<nruns; r++) {
@@ -312,8 +353,19 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
     Int_t mag = runs[r].sbsmag / 21; //convert to percent where max field is at 2100A
 
     //Get run paths
-    std::string rootfile_dir = Form("/w/halla-scshelf2102/sbs/sbs-%s/pass%d/SBS%d/%s/rootfiles/",experiment,pass,config,targ_uppercase.c_str());
+    //std::string rootfile_dir = Form("/w/halla-scshelf2102/sbs/sbs-%s/pass%d/SBS%d/%s/rootfiles/",experiment,pass,config,targ_uppercase.c_str());
+
+    //add new path to pass 2 QA data
+    // std::string exper = experiment;
+    // if( exper.compare("gmn")==0 && pass==2 )
+    //   rootfile_dir = Form("/lustre19/expphy/volatile/halla/sbs/sbs-gmn/GMN_REPLAYS/pass2/QA_FINAL/SBS%d/LH2/rootfiles/",config);
+
+    //Read in rootfile directory and get path
+    std::string rootfile_dir = runs[r].rootfile_dir;
     std::string rootfile_path = rootfile_dir + Form("*%d*",current_runnumber);
+
+    //Read in hcal vertical offset per run
+    Double_t hcal_v_offset = runs[r].hcal_v_offset;
 
     //Get target configuration
     SBStarget target_parameters(current_target);
@@ -334,16 +386,26 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
     //Record old gain and offset parameters by tstamp from database (assumes one file for all timestamps)
     std::string old_db_path = db_path + "/db_sbs.hcal.dat";
     std::string new_adct_path = Form("../timing/parameters/adctoffsets_class_%s_conf%d_pass%d.txt",experiment,config,pass);
+    if( exper.compare("gmn")==0 && pass==2 ){
+      new_adct_path = Form("../timing/parameters/adctsetoffsets_newclus_%s_conf%d_pass%d_0_to_0_exclude_0_to_0.txt",experiment,config,pass);  //Use if timing is not subdivided
+      //rootfile_path = Form("/lustre19/expphy/volatile/halla/sbs/sbs-gmn/GMN_REPLAYS/pass2/QA_FINAL/SBS%d/LH2/rootfiles/*%d*", config, current_runnumber); //only good for GMN
+    }
+
     std::string db_gain_variable = "sbs.hcal.adc.gain";
-    std::string db_adct_variable = "sbs.hcal.adc.timeoffset";
+    std::string db_adct_variable_old = "sbs.hcal.adc.timeoffset";
+    std::string db_adct_variable_new = "(inverted) sbs.hcal.adc.timeoffset";
     Double_t new_adct_offsets[hcal::maxHCalChan] = {0.};
     Double_t old_adct_offsets[hcal::maxHCalChan] = {0.};
     Double_t new_adcg_coeff[hcal::maxHCalChan] = {1.};
-    util::readDB( old_db_path, runs[r].adct_ts, db_adct_variable, old_adct_offsets );
-    //get new adct offsets
-    std::string adct_active_timestamp;
-    util::tsCompare( config_parameters.GetSBSTimestamp(), runs[r].adct_ts, adct_active_timestamp );
-    util::readDB( new_adct_path, adct_active_timestamp, db_adct_variable, new_adct_offsets );
+    //Load new and old adctime parameters only if new alignments are available and necessary
+    if(new_atime){
+      util::readDB( old_db_path, runs[r].adct_ts, db_adct_variable_old, old_adct_offsets );
+      //get new adct offsets
+      std::string adct_active_timestamp;
+      util::tsCompare( config_parameters.GetSBSTimestamp(), runs[r].adct_ts, adct_active_timestamp );
+      std::cout << "Loading parameters from timestamp: " << adct_active_timestamp << std::endl;
+      util::readDB( new_adct_path, adct_active_timestamp, db_adct_variable_new, new_adct_offsets );
+    }
     if( qreplay ){ //Check which timestamp is more current, allowing for hardware changes within a config
       std::string active_timestamp;
       util::tsCompare( current_timestamp, config_parameters.GetSBSTimestamp(), active_timestamp );
@@ -381,8 +443,10 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
 
       //Build quality histograms as necessary from array
       hE[Ncal_set_size]->SetTitle(Form("HCal Cluster E, timestamp: %s; GeV",current_timestamp.c_str()));
+      hcoin[Ncal_set_size]->SetTitle(Form("BBCal Shower Atime - HCal Atime, timestamp: %s; ns",current_timestamp.c_str()));
       hEblk[Ncal_set_size]->SetTitle(Form("HCal Cluster Block E, timestamp: %s; GeV",current_timestamp.c_str()));
       hSF[Ncal_set_size]->SetTitle(Form("HCal Cluster Sampling Fraction, timestamp: %s; %%",current_timestamp.c_str()));
+      hXY[Ncal_set_size]->SetTitle(Form("HCal X vs Y (LH2), timestamp: %s; y_{HCAL}; x_{HCAL} (m)",current_timestamp.c_str()));
       hdxvmag_h[Ncal_set_size]->SetTitle(Form("Delta X vs Field Setting (LH2), timestamp: %s; field (percent); x_{HCAL} - x_{exp} (m)",current_timestamp.c_str()));
       hdyvmag_h[Ncal_set_size]->SetTitle(Form("Delta Y vs Field Setting (LH2), timestamp: %s; field (percent); y_{HCAL} - y_{exp} (m)",current_timestamp.c_str()));
       hdxvmag_d[Ncal_set_size]->SetTitle(Form("Delta X vs Field Setting (LD2), timestamp: %s; field (percent); x_{HCAL} - x_{exp} (m)",current_timestamp.c_str()));
@@ -436,14 +500,19 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
     if( first )
       first = false;
 
+    //TEST
+    elastic_runs.push_back(current_runnumber);
+
     // Setting up chain and branch addresses
     C = new TChain("T");
+    if(verbose)
+      cout << "Adding file to chain: " << rootfile_path << endl;
     C->Add(rootfile_path.c_str());
 
     C->SetBranchStatus("*",0);    
     Double_t BBtr_p[hcal::maxTracks], BBtr_px[hcal::maxTracks], BBtr_py[hcal::maxTracks], BBtr_pz[hcal::maxTracks];
     Double_t BBtr_vz[hcal::maxTracks];
-    Double_t BBtr_n, BBps_x, BBps_y, BBps_e, BBsh_x, BBsh_y, BBsh_e;	
+    Double_t BBtr_n, BBps_x, BBps_y, BBps_e, BBsh_x, BBsh_y, BBsh_e, BBsh_atime;	
     Double_t HCALx, HCALy, HCALe;
     Double_t pblkrow, pblkcol, nblk, nclus;
     Int_t Ncid;
@@ -484,6 +553,7 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
     C->SetBranchStatus( "bb.sh.e", 1 );
     C->SetBranchStatus( "bb.sh.x", 1 );
     C->SetBranchStatus( "bb.sh.y", 1 );
+    C->SetBranchStatus( "bb.sh.atimeblk", 1 );
     C->SetBranchStatus( "bb.hodotdc.clus.tmean", 1 );
     C->SetBranchStatus( "bb.hodotdc.clus.tmean", 1 );
     C->SetBranchStatus( "bb.gem.track.nhits", 1 );
@@ -522,6 +592,7 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
     C->SetBranchAddress( "bb.sh.e", &BBsh_e );
     C->SetBranchAddress( "bb.sh.x", &BBsh_x );
     C->SetBranchAddress( "bb.sh.y", &BBsh_y ); 
+    C->SetBranchAddress( "bb.sh.atimeblk", &BBsh_atime ); 
     C->SetBranchAddress( "bb.hodotdc.clus.tmean", &HODOtmean );
     C->SetBranchAddress( "Ndata.sbs.hcal.clus.id", &Ncid ); //Odd maxing out at 10 clusters on all cluster Ndata objects, so this is needed in addition to sbs.hcal.nclus
 
@@ -575,12 +646,15 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
     
     // Set up hcal coordinate system with hcal angle wrt exit beamline
     vector<TVector3> hcalaxes; util::sethcalaxes( hcaltheta_rad, hcalaxes );
-    TVector3 hcalorigin = hcaldist*hcalaxes[2] + hcal::HCalvoff*hcalaxes[0];
+    TVector3 hcalorigin = hcaldist*hcalaxes[2] + hcal_v_offset*hcalaxes[0];
     Double_t BdL = hcal::maxSBSfield * hcal::sbsdipolegap * (mag/100); //scale crudely by magnetic field
     Double_t Eloss_outgoing = cell_diam/2.0/sin(bbtheta_rad) * target_rho * target_dEdx;
 
     long nevent = 0, nevents = C->GetEntries(); 
     Int_t treenum = 0, currenttreenum = 0;
+
+    //keep track of elastics overall
+    int total_elastics = 0;
 
     //Main loop over events in run
     while (C->GetEntry(nevent++)) {
@@ -600,6 +674,8 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
       if( failedglobal ) 
       	continue;
 
+      postcut1_nevent[Ncal_set_idx]++;
+
       ///////
       //HCal Active Area Cut
       bool failedactivearea = 
@@ -611,19 +687,29 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
       if( failedactivearea ) 
       	continue; //All events with primary cluster element on edge blocks cut
 
+      postcut2_nevent[Ncal_set_idx]++;
+
       ///////
       //HCal primary cluster coincidence time cut (using adctime while hcal tdc suspect, new offsets)
       Int_t pblkid = cblkid[0]-1; //define primary block, primary cluster ID
 
-      Double_t natime = cblkatime[0]+old_adct_offsets[pblkid]-new_adct_offsets[pblkid]; //new atime
+      Double_t natime = cblkatime[0]+old_adct_offsets[pblkid]-new_adct_offsets[pblkid]; //new hcal atime
       Double_t atime0 = cut[0].atime0; //observed elastic peak in adc time
       Double_t atimesig = cut[0].atime_sig; //observed width of elastic peak in adc time
+      Double_t cointime = BBsh_atime-natime;
+      
+      bool failedcoin = abs(cointime-atime0)>atimeNsig*atimesig;
+      //use internal time of hcal prior to bbcal timing alignments, pass0/1
+      if( exper.compare("gmn")==0 && pass<2 )
+	failedcoin = abs(natime-atime0)>atimeNsig*atimesig;
 
-      bool failedcoin = abs(natime-atime0)>atimeNsig*atimesig;
+      hcoin[Ncal_set_idx]->Fill(cointime);
 
       if( failedcoin ) 
       	continue; //All events where adctime outside of reasonable window cut
 	
+      postcut3_nevent[Ncal_set_idx]++;
+
       //ADC arrays reset per event. 
       Double_t A[hcal::maxHCalChan] = {0.0}; // Array to keep track of ADC values per cell. Outscope on each ev
       Double_t A_oneblock[hcal::maxHCalChan] = {0.0}; // Array to keep track of ADC values per cell for one block clusters only. Outscope on each ev
@@ -676,6 +762,8 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
       Double_t thetapq_p = acos( protdir.Dot( qv.Unit() ) );
       Double_t thetapq_n = acos( neutdir.Dot( qv.Unit() ) );
 	  
+      hXY[Ncal_set_idx]->Fill(HCALy,HCALx);
+
       if( current_target.compare("lh2")==0 ){
 	hdxvmag_h[Ncal_set_idx]->Fill( mag, dx );
 	hdyvmag_h[Ncal_set_idx]->Fill( mag, dy );
@@ -693,9 +781,6 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
       Double_t hcal_samp_frac = cut[0].hcal_sf; config_sampling_fraction = hcal_samp_frac;
       Double_t hcal_esratio = cut[0].hcal_es; config_e_sigma_ratio = hcal_esratio;
       Double_t KE_exp = KE_p*hcal_samp_frac/hcal_esratio; //Expected E in HCal, equivalent to KE*modified_samp_frac
-      //TEST ONLY, REMOVE THIS!
-      // if( Ncal_set_idx!=0 )
-      // 	KE_exp = KE_p*hcal_samp_frac/0.2;
 
       ///////
       //BigBite/SBS Acceptance matching. Redundant here with dxdy cuts. Removed.
@@ -717,6 +802,8 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
       if( faileddy ) 
       	continue;
 
+      postcut4_nevent[Ncal_set_idx]++;
+
       ///////
       //PID
       Int_t pid = -1;
@@ -727,6 +814,8 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
       if( pid==-1 ) 
       	continue;
 
+      postcut5_nevent[Ncal_set_idx]++;
+
       ////////////////////////////
       //Primary W2 cut on elastics
       Double_t W2_mean = cut[0].W2_mean;
@@ -735,6 +824,8 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
 
       if( failedW2 ) 
       	continue; //Observed mean W2 cut on elastic peak
+      
+      postcut6_nevent[Ncal_set_idx]++;
       
       ///////
       //Get corrected primary cluster energy
@@ -772,7 +863,11 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
 	cblke_out[blk] = blke;
       }
 
-      Double_t sampling_fraction = clusE/KE_p;
+      //TEST
+      total_elastics++;
+      total_elastics_allruns++;
+
+      Double_t sampling_fraction = clusE/KE_p; //This must be KE_p NOT KE_exp
 
       hE[Ncal_set_idx]->Fill( clusE );
       hSF[Ncal_set_idx]->Fill( sampling_fraction );
@@ -862,6 +957,9 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
       } //endloop over matrix element cols
 
     }//endloop over events
+
+    //TEST
+    elastics_per_run.push_back(total_elastics);
 
     // getting ready for the next run
     C->Reset();
@@ -1135,6 +1233,25 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
   fout->Write();
 
   st->Stop();
+
+  //TEST
+  if( elastics_per_run.size() != elastic_runs.size() ){
+    cout << "TEST ERROR: vector size mismatch" << endl;
+    return;
+  }
+
+  //TEST
+  for( int i=0; i<elastic_runs.size(); ++i ){
+    cout << "run:" << elastic_runs[i] << "  events: " << elastics_per_run[i] << endl;
+
+  }
+  cout << "Total elastics: " << total_elastics_allruns << endl;
+
+  for( Int_t s=0; s<report_set_size; ++s ){
+    cout << "Cut detail set " << s << ", post cut 1:2:3:4:5:6, " << postcut1_nevent[s] << ":" << postcut2_nevent[s] << ":" << postcut3_nevent[s] << ":" << postcut4_nevent[s] << ":" << postcut5_nevent[s] << ":" << postcut6_nevent[s] << endl;
+  }
+
+  cout << endl << endl << "Analysis complete. Output file located " << ecal_path << endl;
 
   // Send time efficiency report to console
   cout << "CPU time elapsed = " << st->CpuTime() << " s = " << st->CpuTime()/60.0 << " min. Real time = " << st->RealTime() << " s = " << st->RealTime()/60.0 << " min." << endl;    

@@ -7,6 +7,7 @@
 #include <vector>
 #include <iostream>
 #include <algorithm>
+#include <vector>
 #include "TCut.h"
 #include "TLorentzVector.h"
 #include "TVector3.h"
@@ -19,16 +20,51 @@
 
 // TDC offset extraction constraints
 const Int_t first_hcal_chan = 0;
-const Int_t total_bins = 320;
-const Int_t lower_lim = -120;
+const Int_t total_bins = 400;
+const Int_t lower_lim = -160;
 const Int_t upper_lim = 40;
+// const Int_t total_bins = 320;
+// const Int_t lower_lim = -120;
+// const Int_t upper_lim = 40;
+// const Int_t total_bins = 800;
+// const Int_t lower_lim = -200;
+// const Int_t upper_lim = 200;
 const Int_t fit_event_min = 50;
 const Double_t observed_tdc_sigma = 2.5; //rough estimate
 const Double_t TDC_target = 0.; //Target value for peak tdc.
 const Int_t linecount = 12;
 
+bool singlerunopt = false; //setup for better calibration on single-run/very-low-statistics data sets
+bool wonkset = true; //setup for run range exceptions
+
+//for small data sets, want to set bad fit signal mean to maximum value. true if there is a unique maximum, else false.
+bool hasUniqueMaximum(TH1D* hist) {
+    // Check if histogram is valid
+    if (!hist) {
+        std::cerr << "Invalid histogram pointer!" << std::endl;
+        return false;
+    }
+
+    // Get the number of bins in the histogram
+    int n_bins = hist->GetNbinsX();
+
+    // Find the maximum value in the histogram
+    double max_val = hist->GetMaximum();
+
+    // Count how many times the maximum value appears
+    int max_count = 0;
+    for (int i = 1; i <= n_bins; i++) {
+        if (hist->GetBinContent(i) == max_val) {
+            max_count++;
+        }
+    }
+
+    // If the maximum value appears more than once, it's not unique
+    return max_count == 1;
+}
+
 //Main <experiment> <configuration> <quasi-replay> <replay-pass> <target_option>; qreplay should only be performed after new offsets obtained
-void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay = false, Int_t pass = 0, bool h2only = false ){
+void tdc_align( const char *experiment = "gmn", Int_t config = 11, bool qreplay = false, Int_t pass = 1, bool h2only = false ){
 
   // Define a clock to check macro processing time
   TStopwatch *st = new TStopwatch();
@@ -41,20 +77,33 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
   std::string h2opt = "";
   if( h2only )
     h2opt = "_lh2only";
-  std::string db_path = gSystem->Getenv("DB_DIR");
-  std::string outdir_path = gSystem->Getenv("OUT_DIR");
-  std::string tdc_align_path = outdir_path + Form("/hcal_calibrations/pass%d/timing/tdcalign%s_%s_conf%d_qr%d_pass%d.root",pass,h2opt.c_str(),experiment,config,(Int_t)qreplay,pass);
 
-  //std::string new_tdcoffset_path = Form("parameters/tdcoffsets_class_%s_conf%d_pass%d.txt",experiment,config,pass);
-  std::string new_tdcoffset_path = "test.txt";
+  std::string wonkopt = "";
+  if( config==11 || config==9 ){
+    std::cout << "Timeshifts observed on this kinematic. wonkset = " << wonkset << std::endl;
+    if( wonkset )
+      wonkopt = "_wonkset";
+    else
+      wonkopt = "_normalset";
+  }
+
+  //std::string db_path = gSystem->Getenv("DB_DIR");
+
+  std::string db_path = "/work/halla/sbs/seeds/alt_sbsreplay/SBS-replay/DB";
+
+  std::string outdir_path = gSystem->Getenv("OUT_DIR");
+  std::string tdc_align_path = outdir_path + Form("/hcal_calibrations/pass%d/timing/tdcalign%s_%s_conf%d_qr%d_pass%d%s.root",pass,h2opt.c_str(),experiment,config,(Int_t)qreplay,pass,wonkopt.c_str());
+
+  std::string new_tdcoffset_path = Form("parameters/tdcoffsets_class_%s_conf%d_pass%d%s.txt",experiment,config,pass,wonkopt.c_str());
+  //std::string new_tdcoffset_path = "test.txt";
   std::string old_db_path = db_path + "/db_sbs.hcal.dat";
   std::string db_tdcoffset_variable = "sbs.hcal.tdc.offset";
   std::string db_tdccalib_variable = "sbs.hcal.tdc.calib";
 
   // Declare output analysis file
-  //TFile *fout = new TFile( tdc_align_path.c_str(), "RECREATE" );
+  TFile *fout = new TFile( tdc_align_path.c_str(), "RECREATE" );
 
-  TFile *fout = new TFile("test.root","RECREATE");
+  //TFile *fout = new TFile("test.root","RECREATE");
 
   std::string plotdir = Form("../quality_plots/%s/conf%d/",experiment,config);
 
@@ -134,6 +183,7 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
 
   //Declare histograms for modification later where additional calibration sets are necessary
   TH2D *htp_hodocorr_ID[hcal::gNstamp];
+  TH1D *htp_allhodocorr[hcal::gNstamp];
 
   for( Int_t set=0; set<hcal::gNstamp; set++ ){
     htp_hodocorr_ID[set] = new TH2D(Form("htp_hodocorr_ID_set%d",set),
@@ -145,7 +195,15 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
 				    lower_lim,
 				    upper_lim);
     
+    htp_allhodocorr[set] = new TH1D(Form("htp_allhodocorr_set%d",set),
+				    "null",
+				    total_bins,
+				    lower_lim,
+				    upper_lim);
+    
   }
+
+    
 
   //minimize reporting
   Int_t target_change_index;
@@ -157,6 +215,47 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
     std::string current_offset_timestamp = runs[r].tdc_ts;
     std::string current_calib_timestamp = runs[r].tdcc_ts;
     Int_t current_runnumber = runs[r].runnum;
+
+    //TEMPORARY FIX for pass2 to account for timing shift
+
+    if( config==11 ){
+      if( wonkset ){
+	if( current_runnumber<12995 )
+	  continue;
+      }else{
+	if( current_runnumber>12995 )
+	  //cout << current_runnumber << endl;
+	  continue;
+      }
+    }else if( config==9 ){
+      if( wonkset ){
+	if( current_runnumber!=13682 )
+	  continue;
+      }else{
+	if( current_runnumber==13682 )
+	  continue;
+      }
+    }
+
+
+    // if( config==11 ){
+    //   if( wonkset ){
+    // 	if( current_runnumber<12450 || current_runnumber>12860 )
+    // 	  continue;
+    //   }else{
+    // 	if( current_runnumber>12450 && current_runnumber<12860 )
+    // 	  //cout << current_runnumber << endl;
+    // 	  continue;
+    //   }
+    // }else if( config==14 ){
+    //   if( wonkset ){
+    // 	if( current_runnumber>13260 )
+    // 	  continue;
+    //   }else{
+    // 	if( current_runnumber<13260 )
+    // 	  continue;
+    //   }
+    // }
 
     std::string current_target = runs[r].target;
     std::string targ_uppercase = current_target; transform(targ_uppercase.begin(), targ_uppercase.end(), targ_uppercase.begin(), ::toupper );
@@ -231,6 +330,8 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
       util::readDB( old_db_path, current_offset_timestamp, db_tdcoffset_variable, tdc_cal[Ncal_set_size].old_param ); 
       util::readDB( old_db_path, current_calib_timestamp, db_tdccalib_variable, tdc_cal[Ncal_set_size].tdc_calib );
       htp_hodocorr_ID[Ncal_set_size]->SetTitle(Form("TDC Primary Block - TDC hodo, offset ts: %s, calib ts: %s;Channel;TDC_{HCAL}-TDC_{HODO} (ns)",tdc_cal[Ncal_set_size].timestamp.c_str(),tdc_cal[Ncal_set_size].calib_ts.c_str()));
+
+      htp_allhodocorr[Ncal_set_size]->SetTitle(Form("TDC Primary Block - TDC hodo All Channels, offset ts: %s, calib ts: %s;TDC_{HCAL}-TDC_{HODO} (ns)",tdc_cal[Ncal_set_size].timestamp.c_str(),tdc_cal[Ncal_set_size].calib_ts.c_str()));
 
       Ncal_set_size++;
     }     
@@ -352,7 +453,7 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
     //Main loop over events in run
     while (C->GetEntry(nevent++)) {
 
-      cout << "Analyzing run " << current_runnumber << ": " <<  nevent << "/" << nevents << " \r";
+      cout << "Analyzing run (" << r << "/" << nruns << ") " << current_runnumber << ": " <<  nevent << "/" << nevents << " \r";
       cout.flush();
 
       ///////
@@ -427,8 +528,13 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
 
       Double_t tdc_tc = hcaltdc-HODOtmean; //Primary cluster, primary block tdc with trigger correction (ns)
       
+      //prevent corruption of later logic which selects histograms to fit based on total number of events
+      if(tdc_tc<-800)
+	continue;
+
       htp_hodocorr_ID[Ncal_set_idx]->Fill( pblkid, tdc_tc );
-      
+      htp_allhodocorr[Ncal_set_idx]->Fill(tdc_tc);
+
       pblkid_out = pblkid;
       tdc_out = cblktime[0];
       atime_out = cblkatime[0];
@@ -452,9 +558,12 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
     
   }//endloop over runs
   
+  cout << "Ended loop over events. Proceeding to fits.." << endl;
+
   // Declare canvas and graph for plots
   TCanvas *TDC_top[Ncal_set_size];
   TCanvas *TDC_bot[Ncal_set_size];
+  TCanvas *TDC_allchan[Ncal_set_size];
 
   // Set up arrays for tgraph
   //No error on cell location
@@ -466,6 +575,8 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
   Double_t tcvalw[Ncal_set_size][hcal::maxHCalChan];
   Double_t tcerr[Ncal_set_size][hcal::maxHCalChan];
   TH1D *tcellslice[Ncal_set_size][hcal::maxHCalChan];
+  Double_t alltcval[Ncal_set_size];
+  Double_t alltcerr[Ncal_set_size];
 
   //Get averages for empty channels
   Double_t tcval_avg[Ncal_set_size];
@@ -486,12 +597,70 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
     tcval_Ng[set] = 0;
 
     //Set up canvases for quality check
+    TDC_allchan[set] = new TCanvas(Form("tdc_fit_allchan_set%d",set),Form("TDC_fit_allchan, set TS: %s, offset TS: %s, calib TS: %s",active_timestamp.c_str(),offset_timestamp.c_str(),calib_timestamp.c_str()),1600,1200);
     TDC_top[set] = new TCanvas(Form("tdc_fit_top_set%d",set),Form("TDC_top, set TS: %s, offset TS: %s, calib TS: %s",active_timestamp.c_str(),offset_timestamp.c_str(),calib_timestamp.c_str()),1600,1200);
     TDC_bot[set] = new TCanvas(Form("tdc_fit_bot_set%d",set),Form("TDC_bot, set TS: %s, offset TS: %s, calib TS: %s",active_timestamp.c_str(),offset_timestamp.c_str(),calib_timestamp.c_str()),1600,1200);
     TDC_top[set]->Divide(12,12);
     TDC_bot[set]->Divide(12,12);
     gStyle->SetOptStat(0);
     
+    //Do fit over all channels
+    TDC_allchan[set]->cd();
+    //Get slices from htDiff_ID and fit for mean vals
+    Double_t allfitl = 0.;
+    Double_t allfith = 0.; 
+
+    Int_t allN = htp_allhodocorr[set]->GetEntries();
+    Int_t allbinmax = htp_allhodocorr[set]->GetMaximumBin();
+    Double_t allbinmaxX = lower_lim+allbinmax*(upper_lim-lower_lim)/total_bins;
+    Double_t allbinmaxY = htp_allhodocorr[set]->GetBinContent(allbinmax);
+    allfitl = allbinmaxX - 2*observed_tdc_sigma;
+    allfith = allbinmaxX + 3*observed_tdc_sigma;
+
+    if( allN<fit_event_min || allbinmaxX<=lower_lim || allbinmaxX>=upper_lim ){
+      htp_allhodocorr[set]->Draw();
+      htp_allhodocorr[set]->SetLineColor(kRed);
+      continue;
+    }
+
+    //TF1 *sgausfit_all = new TF1("sgausfit_all","gaus",allfitl,allfith);
+    TF1 *sgausfit_all = new TF1("sgausfit_all",util::g_sgfit_bg,allfitl,allfith,5);
+
+    sgausfit_all->SetLineWidth(4);
+    sgausfit_all->SetLineColor(kGreen);
+    sgausfit_all->SetParameter(0,allbinmaxY);
+    sgausfit_all->SetParLimits(0,0,1.5*allbinmaxY);
+    sgausfit_all->SetParameter(1,allbinmaxX);
+    sgausfit_all->SetParLimits(1,allfitl,allfith);
+    sgausfit_all->SetParameter(2,observed_tdc_sigma);
+    sgausfit_all->SetParLimits(2,1.,3*observed_tdc_sigma);
+    sgausfit_all->SetParameter(3,1.1);
+    sgausfit_all->SetParLimits(3,0.3,8);
+    sgausfit_all->SetParameter(4,25);
+    sgausfit_all->SetParLimits(4,5,30);
+    htp_allhodocorr[set]->Fit("sgausfit_all","RBMQ");
+
+    htp_allhodocorr[set]->Draw();
+      
+    //tcval[set][c] = sgausfit_all->GetParameter(1);
+    //alltcvalw[set][c] = sgausfit_all->GetMaximumX(); //for a skewed gaussian, parameter 1 isn't the MPV
+    alltcerr[set] = sgausfit_all->GetParameter(2);
+
+    //Catch bad fits on very small data sets, assuming 0.01 is very small wrt sigma of gaussian    
+    if( sgausfit_all->GetMaximumX()>allfith-0.01 || sgausfit_all->GetMaximumX()<allfitl+0.01 ){
+      alltcval[set] = allbinmaxX;
+      sgausfit_all->SetLineColor(kOrange);
+    }else{
+      alltcval[set] = sgausfit_all->GetMaximumX(); //for a skewed gaussian, parameter 1 isn't the MPV
+    }
+
+    //tcellslice[set][c]->SetTitle(Form("Set:%d N:%d MaxX:%f Mean:%f Sigma:%f Alpha:%f",set,sliceN,binmaxX,tcval[set][c],tcerr[set][c],sgausfit_all->GetParameter(3)));
+
+    htp_allhodocorr[set]->SetTitle(Form("Set:%d N:%d MaxX:%f Mean:%f Sigma:%f",set,allN,allbinmaxX,alltcval[set],alltcerr[set])); 
+  
+    htp_allhodocorr[set]->Write();
+
+    //loop over top half of hcal for tdc fits by channel
     for(Int_t c=0; c<hcal::maxHCalChan; c++){
       //initialize the graph arrays
       tcvalw[set][c] = 0.;
@@ -509,7 +678,8 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
       Double_t tfith = 0.;
       tcell[set][c] = c;
       tcellslice[set][c] = htp_hodocorr_ID[set]->ProjectionY(Form("tcellslice_%d_%d",set,c+1),c+1,c+1);
-      tcval[set][c] = tdc_cal[set].old_param[c]; 
+      //tcval[set][c] = tdc_cal[set].old_param[c]; 
+      tcval[set][c] = 0; 
       
       tcvalw[set][c] = 0; 
 
@@ -517,33 +687,63 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
       Int_t binmax = tcellslice[set][c]->GetMaximumBin();
       Double_t binmaxX = lower_lim+binmax*(upper_lim-lower_lim)/total_bins;
       Double_t binmaxY = tcellslice[set][c]->GetBinContent(binmax);
-      tfitl = binmaxX - 4*observed_tdc_sigma;
-      tfith = binmaxX + 4*observed_tdc_sigma;
+      tfitl = binmaxX - 2*observed_tdc_sigma;
+      tfith = binmaxX + 3*observed_tdc_sigma;
 
       if( sliceN<fit_event_min || binmaxX<=lower_lim || binmaxX>=upper_lim ){
 	tcellslice[set][c]->Draw();
+	tcellslice[set][c]->SetLineColor(kRed);
 	continue;
       }
 
+      //skewed gaussian results in better fits, but harder to cut on in aggregate
       TF1 *sgausfit = new TF1("sgausfit",util::g_sgfit_bg,tfitl,tfith,5);
+      //TF1 *sgausfit = new TF1("sgausfit","gaus",tfitl,tfith);
       sgausfit->SetLineWidth(4);
+      sgausfit->SetLineColor(kGreen);
       sgausfit->SetParameter(0,binmaxY);
+      sgausfit->SetParLimits(0,0,1.5*binmaxY);
       sgausfit->SetParameter(1,binmaxX);
       sgausfit->SetParLimits(1,tfitl,tfith);
       sgausfit->SetParameter(2,observed_tdc_sigma);
       sgausfit->SetParLimits(2,1.,3*observed_tdc_sigma);
       sgausfit->SetParameter(3,1.1);
       sgausfit->SetParLimits(3,0.3,8);
-      sgausfit->SetParameter(4,25);
-      sgausfit->SetParLimits(4,5,30);
+      sgausfit->SetParameter(4,20);
+      sgausfit->SetParLimits(4,0,binmaxY/2);
+
       tcellslice[set][c]->Fit("sgausfit","RBMQ");
 
       tcellslice[set][c]->Draw();
       
-      tcval[set][c] = sgausfit->GetParameter(1);
-      tcvalw[set][c] = sgausfit->GetParameter(1);
+      //tcval[set][c] = sgausfit->GetParameter(1);
+      tcvalw[set][c] = sgausfit->GetMaximumX(); //for a skewed gaussian, parameter 1 isn't the MPV
       tcerr[set][c] = sgausfit->GetParameter(2);
-      tcellslice[set][c]->SetTitle(Form("Set:%d N:%d MaxX:%f Mean:%f Sigma:%f Alpha:%f",set,sliceN,binmaxX,tcval[set][c],tcerr[set][c],sgausfit->GetParameter(3)));    
+
+      Double_t p0 = sgausfit->GetParameter(0);
+      Double_t p1 = sgausfit->GetParameter(1);
+      Double_t p2 = sgausfit->GetParameter(2);
+      Double_t p3 = sgausfit->GetParameter(3);
+      Double_t p4 = sgausfit->GetParameter(4);
+
+      bool unique_maximum = hasUniqueMaximum(tcellslice[set][c]);
+
+      //Catch bad fits on very small data sets, check unique maximum and set, else use fit to all data     
+      if( sgausfit->GetMaximumX()<(tfitl+0.01) || 
+	  sgausfit->GetMaximumX()>(tfith-0.01) ){
+	if( unique_maximum )
+	  tcval[set][c] = binmaxX;
+	else
+	  tcval[set][c] = alltcval[set];
+	sgausfit->SetLineColor(kOrange);
+      }else{
+	tcval[set][c] = sgausfit->GetMaximumX(); //for a skewed gaussian, parameter 1 isn't the MPV
+      }
+
+      //tcellslice[set][c]->SetTitle(Form("Set:%d N:%d MaxX:%f Mean:%f Sigma:%f Alpha:%f",set,sliceN,binmaxX,tcval[set][c],tcerr[set][c],sgausfit->GetParameter(3)));
+      // tcellslice[set][c]->SetTitle(Form("Set:%d N:%d MaxX:%f Mean:%f Sigma:%f",set,sliceN,binmaxX,tcval[set][c],tcerr[set][c]));  
+      
+      tcellslice[set][c]->SetTitle(Form("Set:%d N:%d MaxX:%0.2f p0:%0.2f p1:%0.2f p2:%0.2f p3:%0.2f p4:%0.2f",set,allN,sgausfit->GetMaximumX(),p0,p1,p2,p3,p4));  
       tcellslice[set][c]->Write();
 
       tcval_avg[set] += tcval[set][c];
@@ -553,16 +753,17 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
     TDC_top[set]->Write();
     TDC_bot[set]->Write();
 
-    // if( !qreplay ){
-    //   std::string qplotpath_top = plotdir + Form("tdc_fit_top_set%d.png",set);
-    //   std::string qplotpath_bot = plotdir + Form("tdc_fit_bot_set%d.png",set);
-    //   TDC_top[set]->SaveAs(qplotpath_top.c_str());
-    //   TDC_top[set]->SaveAs(qplotpath_bot.c_str());
-    // } 
+    if( !qreplay ){
+      std::string qplotpath_top = plotdir + Form("tdc_fit_top_set%d%s.png",set,wonkopt.c_str());
+      std::string qplotpath_bot = plotdir + Form("tdc_fit_bot_set%d%s.png",set,wonkopt.c_str());
+      TDC_top[set]->SaveAs(qplotpath_top.c_str());
+      TDC_bot[set]->SaveAs(qplotpath_bot.c_str());
+    } 
 
     tcval_avg[set] /= tcval_Ng[set];
 
   }//endloop over slice fits
+
 
   TCanvas *TDC_graph[Ncal_set_size];
   TGraphErrors *gtdc_c[Ncal_set_size];
@@ -576,6 +777,13 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
   // Get tgraph and record tdc offsets
   for( Int_t set=0; set<Ncal_set_size; set++ ){
 
+    //Get average old offset for all blocks
+    Double_t avg_offset = 0.;
+    for( Int_t b=0; b<hcal::maxHCalChan; ++b )
+      avg_offset += tdc_cal[set].old_param[b];
+
+    avg_offset /= hcal::maxHCalChan;
+
     //Define calibration set by newest timestamp (config/tdcoffset/tdccalib) and record constant
     Double_t calib_const = tdc_cal[set].tdc_calib;
     std::string offset_timestamp = tdc_cal[set].timestamp;
@@ -584,6 +792,10 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
     std::string active_timestamp;
     util::tsCompare( offset_timestamp, calib_timestamp, active_timestamp );
     util::tsCompare( active_timestamp, config_timestamp, active_timestamp );
+
+    //console out overall offset parameter from all block fit
+    std::cout << "Average new offset for fit to all channels: " << endl;
+    std::cout << alltcval[set]/calib_const + avg_offset - TDC_target/calib_const << std::endl;
 
     TDC_graph[set] = new TCanvas(Form("TDC_graph, set TS: %s, offset TS: %s, calib TS: %s",active_timestamp.c_str(),offset_timestamp.c_str(),calib_timestamp.c_str()),"TDC vs ID, means",1600,1200);
     TDC_graph[set]->cd();
@@ -611,8 +823,11 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
     for( Int_t r = 0; r<hcal::maxHCalRows; r++){
       for( Int_t c = 0; c<hcal::maxHCalCols; c++){
 	
-	if( tdc_cal[set].old_param[cell]>0 && ( tcval[set][cell]==0 || abs(tcerr[set][cell])<0.05 ) ){ //This will only work if most channels are closely aligned already and oldtdcoffsets aren't believable
-	  writeParFile << tcval_avg[set]/calib_const + tdc_cal[set].old_param[cell] - TDC_target/calib_const << " ";
+	if( singlerunopt )
+	  writeParFile << alltcval[set]/calib_const + tdc_cal[set].old_param[cell] - TDC_target/calib_const << " "; //Applies offset implied by distribution over all channels to each individually. Will not produce reasonable results if the offsets are not already reasonably aligned from a broader data set.
+	else if( tdc_cal[set].old_param[cell]>0 && ( tcval[set][cell]==0 || abs(tcerr[set][cell])<0.05 ) ){ //This will only work if most channels are closely aligned already and oldtdcoffsets aren't believable
+	  std::cout << "WARNING: using alternative offset calculation method on cell " << cell << " set " << set << std::endl;
+	  writeParFile << alltcval[set]/calib_const + tdc_cal[set].old_param[cell] - TDC_target/calib_const << " ";
 	}else{
 	  writeParFile << tcval[set][cell]/calib_const + tdc_cal[set].old_param[cell] - TDC_target/calib_const << " ";
 	}
@@ -626,7 +841,7 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
 
   writeParFile << endl << endl;
 
-    //Add output report canvas
+  //Add output report canvas
   TCanvas *c1[Ncal_set_size];
   Int_t report_height = 1800;
 
@@ -650,7 +865,7 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
       target_option = "LH2";
     std::string report[linecount] = {
       "General TDC Alignment Info",
-      Form("Experiment: %s, Configuration: %d, Pass: %d", experiment, config, pass),
+      Form("Experiment: %s, Configuration: %d %s, Pass: %d", experiment, config, wonkopt.c_str(), pass),
       Form("Creation Date: %s", date.c_str() ),
       Form("Target(s) Used: %s", target_option.c_str() ),
       Form("Calibration Set: %s", tdc_cal[s].timestamp.c_str() ),
@@ -680,6 +895,8 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
   writeParFile.close();
   fout->Write();
   st->Stop();
+
+  cout << "Analysis and fits written to " << tdc_align_path << endl;
 
   // Send time efficiency report to console
   cout << "CPU time elapsed = " << st->CpuTime() << " s = " << st->CpuTime()/60.0 << " min. Real time = " << st->RealTime() << " s = " << st->RealTime()/60.0 << " min." << endl;

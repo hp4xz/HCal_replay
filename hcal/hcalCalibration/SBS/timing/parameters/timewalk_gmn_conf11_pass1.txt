@@ -1,0 +1,22 @@
+
+
+#HCal tdc vs E fit parameters obtained 8_23_2023
+
+--------[ 2021-11-25 00:00:00 ]
+
+#Traditional tdc vs E fit for all PMTs -> y = P0 + P1/( x^P2 ). P0 normal to signal.
+sbs.hcal.tdc.tradtw = 0.50 0.50
+
+#Exponential tdc vs E fit for all PMTs -> y = P0*exp(-P1*x) + P2. P2 normal to signal.
+sbs.hcal.tdc.expotw = 6.23 0.68
+
+
+#First order polynomial tdc vs E fit for all PMTs -> P0 + P1*x. P0 normal to signal.
+sbs.hcal.tdc.poltw = -3.54
+
+
+#First order polynomial adc time vs E fit for all PMTs -> P0 + P1*x. P0 normal to signal.
+sbs.hcal.adct.poltw = -1.23
+
+
+
