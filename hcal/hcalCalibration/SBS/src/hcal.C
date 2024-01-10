@@ -28,7 +28,14 @@ namespace hcal {
       else if(config==4363)
 	return 6.373;
     }else if( experiment.compare("gen")==0 ){ //This section to be finished as new experiments are performed
-      return -1;
+      if(config==1)
+	return 4.291;
+      if(config==2)
+	return 4.291;
+      if(config==3)
+	return 6.373;
+      if(config==4||config==45)
+	return 8.4;
     }else{
       std::cerr << "Error: enter a valid SBS configuration." << std::endl;
       return -1;
@@ -56,7 +63,12 @@ namespace hcal {
       else if(config==4363)
 	return 36.5;
     }else if( experiment.compare("gen")==0 ){ //This section to be finished as new experiments are performed
-      return -1;
+      if(config==2||config==1)
+	return 29.5;
+      else if(config==3)
+	return 36.5;
+      else if(config==4||config==45)
+	return 35;
     }else{
       std::cerr << "Error: enter a valid SBS configuration." << std::endl;
       return -1;
@@ -84,7 +96,9 @@ namespace hcal {
       else if(config==4363)
 	return 1.63;
     }else if( experiment.compare("gen")==0 ){ //This section to be finished as new experiments are performed
-      return -1;
+      if(config==2||config==3||config==4||config==1||config==45)
+	return 1.63;   
+
     }else{
       std::cerr << "Error: enter a valid SBS configuration." << std::endl;
       return -1;
@@ -112,7 +126,12 @@ namespace hcal {
       else if(config==4363)
 	return 22.1;
     }else if( experiment.compare("gen")==0 ){ //This section to be finished as new experiments are performed
-      return -1;
+      if(config==2||config==1)
+	return 34.7;
+      else if(config==3)
+	return 22.1;
+      else if(config==4||config==45)
+	return 18;
     }else{
       std::cerr << "Error: enter a valid SBS configuration." << std::endl;
       return -1;
@@ -129,7 +148,8 @@ namespace hcal {
       else if(config==4363)
 	return 2.8;
     }else if( experiment.compare("gen")==0 ){ //This section to be finished as new experiments are performed
-      return -1;
+      if(config==45||config==1||config==2||config==3||config==4)
+	return 2.8;
     }else{
       std::cerr << "Error: enter a valid SBS configuration." << std::endl;
       return -1;
@@ -151,7 +171,8 @@ namespace hcal {
       else if(config==4363)
 	return 17.0;
     }else if( experiment.compare("gen")==0 ){ //This section to be finished as new experiments are performed
-      return -1;
+      if(config==45||config==1||config==2||config==3||config==4)
+	return 17;
     }else{
       std::cerr << "Error: enter a valid SBS configuration." << std::endl;
       return -1;
@@ -179,7 +200,12 @@ namespace hcal {
       else if(config==4363)
 	return 21.6;
     }else if( experiment.compare("gen")==0 ){ //This section to be finished as new experiments are performed
-      return -1;
+      if(config==1||config==2)
+	return 34.7;
+      else if(config==3)
+	return 21.6;
+      else if(config==45||config==4)
+	return 18;
     }else{
       std::cerr << "Error: enter a valid SBS configuration." << std::endl;
       return -1;
@@ -207,7 +233,14 @@ namespace hcal {
       else if(config==4363)
 	return "--------[ 2021-10-21 00:00:00 ]";
     }else if( experiment.compare("gen")==0 ){ //This section to be finished as new experiments are performed
-      return "";
+      if(config==1||config==2)
+	return "--------[ 2022-10-17 00:00:00 ]";
+      else if(config==3)
+	return "--------[ 2022-11-11 00:00:00 ]";
+      else if(config==4)
+	return "--------[ 2023-01-15 00:00:00 ]";
+      else if(config==45)
+	return "--------[ 2023-09-01 00:00:00 ]";
     }else{
       std::cerr << "Error: enter a valid SBS configuration." << std::endl;
       return "";
@@ -217,7 +250,7 @@ namespace hcal {
 
   //target index for analysis tree
   Int_t tidx(std::string tar){
-    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 ){
+    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 || tar.compare("h2")==0 ){
       return 1;
     }else if( tar.compare("ld2")==0 || tar.compare("LD2")==0 ){
       return 2;
@@ -232,12 +265,12 @@ namespace hcal {
 
   //length of the target in meters
   Double_t ltgt(std::string tar){
-    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 ){
-      return 0.15;
+    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 || tar.compare("h2")==0 ){
+      return 0.60;
     }else if( tar.compare("ld2")==0 || tar.compare("LD2")==0 ){
       return 0.15;
     }else if( tar.compare("he3")==0 || tar.compare("He3")==0 || tar.compare("HE3")==0 ){
-      return 0.30;
+      return 0.60;
     }else{
       std::cerr << "Error: enter a valid target." << std::endl;
       return -1;
@@ -247,7 +280,7 @@ namespace hcal {
 
   //target density in g/cc
   Double_t tarrho(std::string tar){
-    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 ){
+    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 || tar.compare("h2")==0){
       return 0.0723;
     }else if( tar.compare("ld2")==0 || tar.compare("LD2")==0 ){
       return 0.169;
@@ -262,7 +295,7 @@ namespace hcal {
 
   //cell density in g/cc
   Double_t crho(std::string tar){
-    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 ){
+    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 ||tar.compare("h2")==0 ){
       return 2.71;
     }else if( tar.compare("ld2")==0 || tar.compare("LD2")==0 ){
       return 2.71;
@@ -277,7 +310,7 @@ namespace hcal {
 
   //cell diameter in cm
   Double_t cdiam(std::string tar){
-    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 ){
+    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 || tar.compare("h2")==0 ){
       return 4.064;
     }else if( tar.compare("ld2")==0 || tar.compare("LD2")==0 ){
       return 4.064;
@@ -292,7 +325,7 @@ namespace hcal {
 
   //collisional stopping power of cell wall in GeV*m/g
   Double_t cdEdx(std::string tar){
-    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 ){
+    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 || tar.compare("h2")==0 ){
       return 0.0021;
     }else if( tar.compare("ld2")==0 || tar.compare("LD2")==0 ){
       return 0.0021;
@@ -307,7 +340,7 @@ namespace hcal {
 
   //cell wall thickness in m
   Double_t cthick(std::string tar){
-    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 ){
+    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 || tar.compare("h2")==0 ){
       return 0.02;
     }else if( tar.compare("ld2")==0 || tar.compare("LD2")==0 ){
       return 0.02;
@@ -322,7 +355,7 @@ namespace hcal {
 
   //Upstream cell wall thickness in m
   Double_t uwallthick(std::string tar){
-    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 ){
+    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 ||tar.compare("h2")==0 ){
       return 0.0145;
     }else if( tar.compare("ld2")==0 || tar.compare("LD2")==0 ){
       return 0.0145;
@@ -337,7 +370,7 @@ namespace hcal {
 
   //Downstream cell wall thickness in m
   Double_t dwallthick(std::string tar){
-    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 ){
+    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 || tar.compare("h2")==0 ){
       return 0.015;
     }else if( tar.compare("ld2")==0 || tar.compare("LD2")==0 ){
       return 0.015;
@@ -352,7 +385,7 @@ namespace hcal {
 
   //target collisional stopping power in GeV*m/g
   Double_t dEdx(std::string tar){
-    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 ){
+    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 ||tar.compare("h2")==0){
       return 0.00574;
     }else if( tar.compare("ld2")==0 || tar.compare("LD2")==0 ){
       return 0.01148;
@@ -367,7 +400,7 @@ namespace hcal {
 
   //average target mass
   Double_t M_t(std::string tar){
-    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 ){
+    if( tar.compare("lh2")==0 || tar.compare("LH2")==0 ||tar.compare("h2")==0){
       return 0.938272;
     }else if( tar.compare("ld2")==0 || tar.compare("LD2")==0 ){
       return (0.938272+0.939565)/2;

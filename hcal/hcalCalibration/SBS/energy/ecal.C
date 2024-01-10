@@ -51,11 +51,15 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
   if( h2only )
     h2opt = "_lh2only";
   std::string outdir_path = gSystem->Getenv("OUT_DIR");
-  std::string ecal_path = outdir_path + Form("/hcal_calibrations/pass%d/energy/ecal%s_%s_conf%d_qr%d_pass%d.root",pass,h2opt.c_str(),experiment,config,(Int_t)qreplay,pass);
-
+  std::string ecal_path = outdir_path + Form("/gen/energy/pass%d/ecal%s_%s_conf%d_qr%d_pass%d.root",pass,h2opt.c_str(),experiment,config,(Int_t)qreplay,pass);
+  
+  
+  std::string testpath = "ecaltest.root";
+  
   //Set up path variables and output files
   string db_path = gSystem->Getenv("DB_DIR");
-  TFile *fout = new TFile( ecal_path.c_str(), "RECREATE" );
+ // TFile *fout = new TFile( ecal_path.c_str(), "RECREATE" );
+  TFile *fout = new TFile(testpath.c_str(),"RECREATE");
   std::string new_adcgain_path = Form("parameters/adcgaincoeff_%s%s_conf%d_pass%d.txt",experiment,h2opt.c_str(),config,pass);
 
   // Get information from .csv files
@@ -305,16 +309,28 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
 
     //Get run experimental parameters
     std::string current_timestamp = runs[r].adcg_ts;
+    cout << current_timestamp<<endl;
     Int_t current_runnumber = runs[r].runnum;
 
     std::string current_target = runs[r].target;
-    std::string targ_uppercase = current_target; transform(targ_uppercase.begin(), targ_uppercase.end(), targ_uppercase.begin(), ::toupper );
+    std::string targ_uppercase =current_target;
+    targ_uppercase[0]=std::toupper(targ_uppercase[0]);
     Int_t mag = runs[r].sbsmag / 21; //convert to percent where max field is at 2100A
 
     //Get run paths
-    std::string rootfile_dir = Form("/w/halla-scshelf2102/sbs/sbs-%s/pass%d/SBS%d/%s/rootfiles/",experiment,pass,config,targ_uppercase.c_str());
+    //std::string rootfile_dir = Form("/w/halla-scshelf2102/sbs/sbs-%s/pass%d/SBS%d/%s/rootfiles/",experiment,pass,config,targ_uppercase.c_str());
+    //std::string rootfile_path = rootfile_dir + Form("*%d*",current_runnumber);
+//    std::string rootfile_dir = Form("/lustre19/expphy/volatile/halla/sbs/sbs-%s/GEN_REPLAYS/Rootfiles/GEN%d/%s/",experiment,config,targ_uppercase.c_str());
+//    if(config==2&&targ_uppercase.compare("H2")==0){
+//      cout << mag<<endl;
+//      rootfile_dir=rootfile_dir+Form("SBS%d/rootfiles/",mag);
+//    }
+//    if(config!=2&&targ_uppercase.compare("H2")==0){
+//      rootfile_dir=rootfile_dir+"rootfiles/";
+//    }
+    std::string rootfile_dir="/lustre19/expphy/volatile/halla/sbs/sbs-gen/GEN_REPLAYS/Rootfiles/GEN4/He3/rootfiles/";
     std::string rootfile_path = rootfile_dir + Form("*%d*",current_runnumber);
-
+    cout<<rootfile_path<<endl;
     //Get target configuration
     SBStarget target_parameters(current_target);
     Int_t target_index = target_parameters.GetTargIndex();  //Target index (1:lh2,2:ld2,3:he3)
@@ -336,14 +352,16 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
     std::string new_adct_path = Form("../timing/parameters/adctoffsets_class_%s_conf%d_pass%d.txt",experiment,config,pass);
     std::string db_gain_variable = "sbs.hcal.adc.gain";
     std::string db_adct_variable = "sbs.hcal.adc.timeoffset";
+    //cout << old_db_path << endl <<new_adct_path<<endl<<db_gain_variable<<endl<<db_adct_variable<<endl;
     Double_t new_adct_offsets[hcal::maxHCalChan] = {0.};
     Double_t old_adct_offsets[hcal::maxHCalChan] = {0.};
     Double_t new_adcg_coeff[hcal::maxHCalChan] = {1.};
     util::readDB( old_db_path, runs[r].adct_ts, db_adct_variable, old_adct_offsets );
-    //get new adct offsets
     std::string adct_active_timestamp;
     util::tsCompare( config_parameters.GetSBSTimestamp(), runs[r].adct_ts, adct_active_timestamp );
     util::readDB( new_adct_path, adct_active_timestamp, db_adct_variable, new_adct_offsets );
+
+    //std::string adct_active_timestamp;
     if( qreplay ){ //Check which timestamp is more current, allowing for hardware changes within a config
       std::string active_timestamp;
       util::tsCompare( current_timestamp, config_parameters.GetSBSTimestamp(), active_timestamp );
@@ -376,10 +394,21 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
       gain_coeff[Ncal_set_size].Ma_oneblock.ResizeTo(hcal::maxHCalChan,hcal::maxHCalChan);
       gain_coeff[Ncal_set_size].ba.ResizeTo(hcal::maxHCalChan);
       gain_coeff[Ncal_set_size].ba_oneblock.ResizeTo(hcal::maxHCalChan);
-
-      util::readDB( old_db_path, current_timestamp, db_gain_variable, gain_coeff[Ncal_set_size].old_param );      
-
-      //Build quality histograms as necessary from array
+      
+      util::readDB( old_db_path, current_timestamp, db_gain_variable,gain_coeff[Ncal_set_size].old_param);      
+      //
+      //
+      std::cout <<"Old DB gain parameters on set  " << Ncal_set_idx << std::endl << std::endl;
+      for( int r=0; r<24; r++ ){
+        for ( int c=0; c<12; c++){
+          int i = r*12+c;
+          std::cout << gain_coeff[Ncal_set_size].old_param[i]<<" ";
+	}
+      	std::cout << std::endl;
+      }
+      //
+      //
+	//Build quality histograms as necessary from array
       hE[Ncal_set_size]->SetTitle(Form("HCal Cluster E, timestamp: %s; GeV",current_timestamp.c_str()));
       hEblk[Ncal_set_size]->SetTitle(Form("HCal Cluster Block E, timestamp: %s; GeV",current_timestamp.c_str()));
       hSF[Ncal_set_size]->SetTitle(Form("HCal Cluster Sampling Fraction, timestamp: %s; %%",current_timestamp.c_str()));
@@ -407,6 +436,7 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
     for( int r=0; r<24; r++ ){
       for ( int c=0; c<12; c++){
 	int i = r*12+c;
+        
 	if( first ){
 	  test_adcg_coeff[i] = new_adcg_coeff[i];
 	}else{
@@ -425,13 +455,13 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
 	}
       }
     }
-
     //Get available cuts for current config/target/field combination. Use first element (0) of cut
     vector<calcut> cut;
     util::ReadCutList(struct_dir,experiment,config,Ncal_set_idx,pass,current_target,mag,verb,cut);
     if( different || first )
       std::cout << cut[0];
     
+    cout <<"we made it"<<endl;
     //Remove first calibration set trigger for future processing
     if( first )
       first = false;
@@ -581,11 +611,11 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
 
     long nevent = 0, nevents = C->GetEntries(); 
     Int_t treenum = 0, currenttreenum = 0;
-
+    int passedGlobal =0;
     //Main loop over events in run
     while (C->GetEntry(nevent++)) {
 
-      cout << "Analyzing run " << current_runnumber << ": " <<  nevent << "/" << nevents << " \r";
+      cout << " Analyzing run " << current_runnumber<< "("<<r << "/"<<nruns<< ") : " <<  nevent << "/" << nevents << " \r";
       cout.flush();
 
       ///////
@@ -599,10 +629,10 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
 	  
       if( failedglobal ) 
       	continue;
-
       ///////
       //HCal Active Area Cut
       bool failedactivearea = 
+  
 	pblkrow==0 || 
 	pblkrow==23 || 
 	pblkcol==0 || 
@@ -610,7 +640,6 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
 
       if( failedactivearea ) 
       	continue; //All events with primary cluster element on edge blocks cut
-
       ///////
       //HCal primary cluster coincidence time cut (using adctime while hcal tdc suspect, new offsets)
       Int_t pblkid = cblkid[0]-1; //define primary block, primary cluster ID
@@ -623,8 +652,6 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
 
       if( failedcoin ) 
       	continue; //All events where adctime outside of reasonable window cut
-	
-      //ADC arrays reset per event. 
       Double_t A[hcal::maxHCalChan] = {0.0}; // Array to keep track of ADC values per cell. Outscope on each ev
       Double_t A_oneblock[hcal::maxHCalChan] = {0.0}; // Array to keep track of ADC values per cell for one block clusters only. Outscope on each ev
 
@@ -714,8 +741,8 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
       Double_t dysig = cut[0].dy_sig;
       bool faileddy = abs(dy-dy0)>3*dysig;
 
-      if( faileddy ) 
-      	continue;
+      //if( faileddy ) 
+     // 	continue;
 
       ///////
       //PID
@@ -724,8 +751,10 @@ void ecal( const char *experiment = "gmn", Int_t config = 4, bool qreplay = fals
 
       ///////
       //dx elastic cut
-      if( pid==-1 ) 
-      	continue;
+      //if( pid==-1 ) 
+      	//continue;
+	passedGlobal++;	
+      //ADC arrays reset per event. 
 
       ////////////////////////////
       //Primary W2 cut on elastics

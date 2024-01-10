@@ -19,10 +19,10 @@
 
 // TDC offset extraction constraints
 const Int_t first_hcal_chan = 0;
-const Int_t total_bins = 320;
-const Int_t lower_lim = -120;
-const Int_t upper_lim = 40;
-const Int_t fit_event_min = 50;
+const Int_t total_bins = 400;
+const Int_t lower_lim = -100;
+const Int_t upper_lim = 100;
+const Int_t fit_event_min = 6;
 const Double_t observed_tdc_sigma = 2.5; //rough estimate
 const Double_t TDC_target = 0.; //Target value for peak tdc.
 const Int_t linecount = 12;
@@ -156,16 +156,38 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
     //Get run experimental parameters
     std::string current_offset_timestamp = runs[r].tdc_ts;
     std::string current_calib_timestamp = runs[r].tdcc_ts;
+    //std::string current_offset_timestamp = "none";
+    //std:: string current_calib_timestamp = "none";
     Int_t current_runnumber = runs[r].runnum;
-
+    cout <<"Runs: "<< runs[r].tdc_ts<< "\n";
     std::string current_target = runs[r].target;
-    std::string targ_uppercase = current_target; transform(targ_uppercase.begin(), targ_uppercase.end(), targ_uppercase.begin(), ::toupper );
+    //std::string targ_uppercase = current_target; transform(targ_uppercase.begin(), targ_uppercase.end(), targ_uppercase.begin(), ::toupper );
+    std::string targ_uppercase = current_target;
+    targ_uppercase[0]=std::toupper(targ_uppercase[0]);
     Int_t mag = runs[r].sbsmag / 21; //convert to percent where max field is at 2100A
-
+    cout << targ_uppercase<<endl;
     //Get run paths
-    std::string rootfile_dir = Form("/w/halla-scshelf2102/sbs/sbs-%s/pass%d/SBS%d/%s/rootfiles/",experiment,pass,config,targ_uppercase.c_str());
-    std::string rootfile_path = rootfile_dir + Form("*%d*",current_runnumber);
 
+    //std::string rootfile_dir = Form("/w/halla-scshelf2102/sbs/sbs-%s/pass%d/SBS%d/%s/rootfiles/",experiment,pass,config,targ_uppercase.c_str());
+    //std::string rootfile_path = rootfile_dir + Form("*%d*",current_runnumber);
+   // cout << "Trying to find rootfile dir";
+     
+
+
+
+
+    //std::string rootfile_dir = Form("/mss/halla/sbs/prod/GEnII/pass1/GEN%d/%s/rootfiles",config,targ_uppercase.c_str());
+    //if(targ_uppercase.compare("H2")==0){
+    //  rootfile_dir=rootfile_dir+"rootfiles/";
+    //}
+//    if(config==45){
+  //    rootfile_dir=("/lustre19/expphy/volatile/halla/sbs/sbs-gen/GEN_REPLAYS/Rootfiles/GEN4/He3/rootfiles");
+    //}
+    // temporary GEN4b directory
+    std::string rootfile_dir = Form("/volatile/halla/sbs/sbs-gen/GEN_REPLAYS/Rootfiles/GEN4/He3/rootfiles/");
+    cout << "Found : " << rootfile_dir << "\n";
+    std::string rootfile_path = rootfile_dir +Form("*%d*",current_runnumber);
+    cout << rootfile_path; 
     //Get target configuration
     SBStarget target_parameters(current_target);
     Int_t target_index = target_parameters.GetTargIndex();
@@ -190,13 +212,14 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
 
     //Record new offset parameters from qreplay==false. Repopulate array on each run for changing timestamps
     Double_t new_tdc_offsets[hcal::maxHCalChan] = {0.};
+    //cout << "Checking DB" << '\n';
     if( qreplay ){ //Check which timestamp is newest (DB:tdcoffset, DB:tdccalib, new)
       std::string active_timestamp;
       util::tsCompare( current_offset_timestamp, config_parameters.GetSBSTimestamp(), active_timestamp );
       util::tsCompare( active_timestamp, current_calib_timestamp, active_timestamp );
       util::readDB( new_tdcoffset_path, active_timestamp, db_tdcoffset_variable, new_tdc_offsets );
     }
-
+    //cout << "DB Checked \n";
     //////////
     //Select correct calibration set.
     bool new_calib_ts = true;
@@ -225,11 +248,14 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
 	cout << "Error: Allowable calibration sets exceed maximum of " << hcal::gNstamp << ". Check timestamps and adjust limits as necessary." << endl;
 	return;
       }
-
+      //cout << "Reading DB \n"<< current_offset_timestamp<<endl<<current_calib_timestamp<<endl<<tdc_cal[Ncal_set_size].old_param<<endl;
+      //cout<<old_db_path;
       tdc_cal[Ncal_set_size].timestamp = current_offset_timestamp.c_str();
       tdc_cal[Ncal_set_size].calib_ts = current_calib_timestamp.c_str();
-      util::readDB( old_db_path, current_offset_timestamp, db_tdcoffset_variable, tdc_cal[Ncal_set_size].old_param ); 
+      util::readDB( old_db_path, current_offset_timestamp, db_tdcoffset_variable, tdc_cal[Ncal_set_size].old_param );
+      cout << "First line Passed \n"; 
       util::readDB( old_db_path, current_calib_timestamp, db_tdccalib_variable, tdc_cal[Ncal_set_size].tdc_calib );
+      cout << "DB Read \n";
       htp_hodocorr_ID[Ncal_set_size]->SetTitle(Form("TDC Primary Block - TDC hodo, offset ts: %s, calib ts: %s;Channel;TDC_{HCAL}-TDC_{HODO} (ns)",tdc_cal[Ncal_set_size].timestamp.c_str(),tdc_cal[Ncal_set_size].calib_ts.c_str()));
 
       Ncal_set_size++;
@@ -237,8 +263,9 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
 
     //Get available cuts for current config/target/field combination. Use first element (0) of cut
     vector<calcut> cut;
+    //cout<<"about to read cut list" <<endl;
     util::ReadCutList(struct_dir,experiment,config,Ncal_set_idx,pass,current_target,mag,verb,cut);
-
+    
     // Setting up chain and branch addresses
     C = new TChain("T");
     C->Add(rootfile_path.c_str());
@@ -275,7 +302,9 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
     C->SetBranchStatus( "sbs.hcal.clus.x", 1 );
     C->SetBranchStatus( "sbs.hcal.clus.y", 1 );
     C->SetBranchStatus( "sbs.hcal.clus.atime", 1 );
+    
     C->SetBranchStatus( "bb.tr.n", 1 );
+    
     C->SetBranchStatus( "bb.tr.px", 1 );
     C->SetBranchStatus( "bb.tr.py", 1 );
     C->SetBranchStatus( "bb.tr.pz", 1 );    
@@ -312,7 +341,9 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
     C->SetBranchAddress( "sbs.hcal.clus.x", cx );
     C->SetBranchAddress( "sbs.hcal.clus.y", cy );
     C->SetBranchAddress( "sbs.hcal.clus.atime", catime );
+   
     C->SetBranchAddress( "bb.tr.n", &BBtr_n );
+   
     C->SetBranchAddress( "bb.tr.px", BBtr_px );
     C->SetBranchAddress( "bb.tr.py", BBtr_py );
     C->SetBranchAddress( "bb.tr.pz", BBtr_pz );
@@ -330,16 +361,17 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
     //Globalcut enables
     C->SetBranchStatus( "bb.tr.tg_th", 1 );
     C->SetBranchStatus( "bb.tr.tg_ph", 1 );
-
+    cout << "B" <<endl;
     //Use TTreeFormula to avoid looping over data an additional time
     TCut GCut = cut[0].gcut.c_str();
+    cout<< GCut<<endl;
 
     //Add globalcut and elastic cuts for reporting
     tdc_cal[Ncal_set_idx].gcut = cut[0].gcut;
     tdc_cal[Ncal_set_idx].minEv = fit_event_min;
-
+   // cout << "B \n";
     TTreeFormula *GlobalCut = new TTreeFormula( "GlobalCut", GCut, C );
-
+    cout << "Found the cuts"<<endl;
     // Set up hcal coordinate system with hcal angle wrt exit beamline
     vector<TVector3> hcalaxes; util::sethcalaxes( hcaltheta_rad, hcalaxes );
     TVector3 hcalorigin = hcaldist*hcalaxes[2] + hcal::HCalvoff*hcalaxes[0];
@@ -347,14 +379,16 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
     Double_t Eloss_outgoing = cell_diam/2.0/sin(bbtheta_rad) * target_rho * target_dEdx;
 
     long nevent = 0, nevents = C->GetEntries(); 
-    Int_t treenum = 0, currenttreenum = 0;
-
+    Int_t treenum = 0, currenttreenum = 0, Nelastics=0;
+   
+    //cout << "A \n";
     //Main loop over events in run
     while (C->GetEntry(nevent++)) {
-
-      cout << "Analyzing run " << current_runnumber << ": " <<  nevent << "/" << nevents << " \r";
+   
+      cout << "Analyzing run " << current_runnumber << ": " <<  nevent << "/" << nevents <<" Nelastics "<< Nelastics<< " \r";
+      
       cout.flush();
-
+      //cout <<endl<< BBtr_n << endl;
       ///////
       //Single-loop elastic globalcut method. Save pass/fail for output tree.
       currenttreenum = C->GetTreeNumber();
@@ -365,7 +399,7 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
       bool failedglobal = GlobalCut->EvalInstance(0) == 0;
 	  
       if( failedglobal ) continue;
-
+      
       ///////
       //Physics calculations
       //correct beam energy with vertex information, primary track
@@ -384,14 +418,12 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
       TLorentzVector q = pbeam - pe; //virtual photon mom. or mom. transferred to scatter nucleon (N')
       TVector3 qv = q.Vect();
       TLorentzVector pN; //N' momentum
-      
-      //simple calculations for e' and N'
       Double_t etheta = acos( pe.Pz() / pe.E() );
       Double_t ephi = atan2( pe.Py(), pe.Px() );
       Double_t pcent = ebeam_c/( 1. + ( ebeam_c/M_avg )*( 1.0 - cos(etheta) ) ); //e' p reconstructed by angles
       Double_t phNexp = ephi + hcal::PI;
       Double_t Q2, W2;
-
+      //cout << "A \n";
       //e' p reconstruction with track angles (not momentum)
       Double_t nu = pbeam.E() - pcent;
       Double_t pNexp = sqrt( pow(nu, 2.) + 2. * M_avg * nu );
@@ -417,6 +449,8 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
 	  
       if( failedaccmatch ) continue;
 
+      Nelastics++;
+      
       Double_t pblkid = (double)cblkid[0]-1;
       Double_t hcaltdc = cblktime[0];
       //correct the tree tdc time with new offset
@@ -525,17 +559,19 @@ void tdc_align( const char *experiment = "gmn", Int_t config = 4, bool qreplay =
 	continue;
       }
 
-      TF1 *sgausfit = new TF1("sgausfit",util::g_sgfit_bg,tfitl,tfith,5);
+//      TF1 *sgausfit = new TF1("sgausfit",util::g_sgfit_bg,tfitl,tfith,5);
+      TF1 *sgausfit = new TF1("sgausfit","gaus",tfitl,tfith);
+
       sgausfit->SetLineWidth(4);
       sgausfit->SetParameter(0,binmaxY);
       sgausfit->SetParameter(1,binmaxX);
       sgausfit->SetParLimits(1,tfitl,tfith);
       sgausfit->SetParameter(2,observed_tdc_sigma);
       sgausfit->SetParLimits(2,1.,3*observed_tdc_sigma);
-      sgausfit->SetParameter(3,1.1);
-      sgausfit->SetParLimits(3,0.3,8);
-      sgausfit->SetParameter(4,25);
-      sgausfit->SetParLimits(4,5,30);
+      //sgausfit->SetParameter(3,1.1);
+      //sgausfit->SetParLimits(3,0.3,8);
+      //sgausfit->SetParameter(4,25);
+      //sgausfit->SetParLimits(4,5,30);
       tcellslice[set][c]->Fit("sgausfit","RBMQ");
 
       tcellslice[set][c]->Draw();

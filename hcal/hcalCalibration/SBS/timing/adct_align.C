@@ -18,9 +18,9 @@
 
 // ADCt offset extraction constraints
 const Int_t first_hcal_chan = 0;
-const Int_t total_bins = 320;
+const Int_t total_bins = 600;
 const Int_t lower_lim = -60;
-const Int_t upper_lim = 100;
+const Int_t upper_lim = 240;
 const Int_t fit_event_min = 50; //Minimum events in histogram to fit
 const Double_t observed_adct_sigma = 4.0; //rough estimate
 const Double_t ADCt_target = 0.; //set the adc time target (ns)
@@ -108,10 +108,10 @@ void adct_align( const char *experiment = "gmn", Int_t config=4, bool qreplay = 
   std::string db_adctoffset_variable = "sbs.hcal.adc.timeoffset";
   std::string db_tmax_variable = "sbs.hcal.tmax";
 
-  //std::string testpath = "adcttest.root";
+  std::string testpath = "adcttest.root";
 
   // Set up output analysis file
-  TFile *fout = new TFile( adctalign_path.c_str(), "RECREATE" );
+  TFile *fout = new TFile( testpath.c_str(), "RECREATE" );
 
   // Get information from .csv files
   std::string struct_dir = Form("../config/%s/",experiment); //unique to my environment for now
@@ -254,13 +254,20 @@ void adct_align( const char *experiment = "gmn", Int_t config=4, bool qreplay = 
     Int_t current_runnumber = runs[r].runnum;
 
     std::string current_target = runs[r].target;
-    std::string targ_uppercase = current_target; transform(targ_uppercase.begin(), targ_uppercase.end(), targ_uppercase.begin(), ::toupper );
+    //std::string targ_uppercase = current_target; transform(targ_uppercase.begin(), targ_uppercase.end(), targ_uppercase.begin(), ::toupper );
+    std::string targ_uppercase =current_target;
+    targ_uppercase[0]=std::toupper(targ_uppercase[0]);
     Int_t mag = runs[r].sbsmag / 21; //convert to percent where max field is at 2100A
 
     //Get run paths
-    std::string rootfile_dir = Form("/w/halla-scshelf2102/sbs/sbs-%s/pass%d/SBS%d/%s/rootfiles/",experiment,pass,config,targ_uppercase.c_str());
+//    std::string rootfile_dir = Form("/w/halla-scshelf2102/sbs/sbs-%s/pass%d/SBS%d/%s/rootfiles/",experiment,pass,config,targ_uppercase.c_str());
+//    std::string rootfile_dir = Form("/lustre19/expphy/volatile/halla/sbs/sbs-%s/GEN_REPLAYS/Rootfiles/GEN%d/%s/",experiment,config,targ_uppercase.c_str());
+  //  if(targ_uppercase.compare("H2")==0){
+    //  rootfile_dir=rootfile_dir+"rootfiles/";
+    //}
+    std::string rootfile_dir = Form("/volatile/halla/sbs/sbs-gen/GEN_REPLAYS/Rootfiles/GEN4/He3/rootfiles/");
     std::string rootfile_path = rootfile_dir + Form("*%d*",current_runnumber);
-
+    cout << rootfile_path<<endl;
     //Get target configuration
     SBStarget target_parameters(current_target);
     Int_t target_index = target_parameters.GetTargIndex();
@@ -314,7 +321,9 @@ void adct_align( const char *experiment = "gmn", Int_t config=4, bool qreplay = 
       }
 
       adct_cal[Ncal_set_size].timestamp = current_offset_timestamp.c_str();
+      cout << "B" << endl;
       util::readDB( old_db_path, current_offset_timestamp, db_adctoffset_variable, adct_cal[Ncal_set_size].old_param ); 
+      cout << "A" << endl;
       hap_hodocorr_ID[Ncal_set_size]->SetTitle(Form("ADCt Primary Block - TDC hodo, offset ts: %s;Channel;ADCt_{HCAL}-TDC_{HODO} (ns)",adct_cal[Ncal_set_size].timestamp.c_str()));
       hadct_samp1_run[Ncal_set_size]->SetTitle(Form("ADCt vs Run, offset ts: %s;Run;ADCt_{HCAL} (ns)",adct_cal[Ncal_set_size].timestamp.c_str()));
       hadct_samp2_run[Ncal_set_size]->SetTitle(Form("ADCt vs Run, offset ts: %s;Run;ADCt_{HCAL} (ns)",adct_cal[Ncal_set_size].timestamp.c_str()));
@@ -327,7 +336,7 @@ void adct_align( const char *experiment = "gmn", Int_t config=4, bool qreplay = 
     //Get available cuts for current config/target/field combination. Use first element (0) of cut
     vector<calcut> cut;
     util::ReadCutList(struct_dir,experiment,config,Ncal_set_idx,pass,current_target,mag,verb,cut);
-
+    //cout << cut;
     // Setting up chain and branch addresses
     C = new TChain("T");
     C->Add(rootfile_path.c_str());
@@ -425,7 +434,7 @@ void adct_align( const char *experiment = "gmn", Int_t config=4, bool qreplay = 
 
     //Use TTreeFormula to avoid looping over data an additional time
     TCut GCut = cut[0].gcut.c_str();
-
+    //cout << cut[0];
     //Add globalcut and elastic cuts for reporting
     adct_cal[Ncal_set_idx].gcut = cut[0].gcut;
     adct_cal[Ncal_set_idx].minEv = fit_event_min;
@@ -537,21 +546,21 @@ void adct_align( const char *experiment = "gmn", Int_t config=4, bool qreplay = 
 	hadctblk[Ncal_set_idx]->Fill(blkatime);
       }
 
-      pblkid_out = pblkid;
-      tdc_out = cblktime[0];
-      atime_out = hcalatime;
-      atime_hc_out = hcalatime-HODOtmean;
-      atime_bc_out = hcalatime-BBps_atime;
-      hcale_out = HCALe;
-      dx_out = dx;
-      dy_out = dy;
-      W2_out = W2;
-      Q2_out = Q2;
-      nblk_out = nblk;   
-      mag_out = mag;
-      run_out = current_runnumber;
-      tar_out = target_index;
-      hodotmean_out = HODOtmean;
+    //  pblkid_out = pblkid;
+      //tdc_out = cblktime[0];
+      //atime_out = hcalatime;
+      //atime_hc_out = hcalatime-HODOtmean;
+      //atime_bc_out = hcalatime-BBps_atime;
+      //hcale_out = HCALe;
+      //dx_out = dx;
+      //dy_out = dy;
+      //W2_out = W2;
+      //Q2_out = Q2;
+      //nblk_out = nblk;   
+      //mag_out = mag;
+      //run_out = current_runnumber;
+      //tar_out = target_index;
+      //hodotmean_out = HODOtmean;
 
       P->Fill();
 	  
@@ -631,16 +640,18 @@ void adct_align( const char *experiment = "gmn", Int_t config=4, bool qreplay = 
     allblkfitl = allblkbinmaxX - 2*observed_adct_sigma;
     allblkfith = allblkbinmaxX + 2*observed_adct_sigma;
 
-    TF1 *gausfitallblk = new TF1("gausfitallblk",util::g_gfit_bg,allblkfitl,allblkfith,5);
+    //TF1 *gausfitallblk = new TF1("gausfitallblk",util::g_gfit_bg,allblkfitl,allblkfith,5);
+    TF1 *gausfitallblk = new TF1("gausfitallblk","gaus",allblkfitl,allblkfith);
+
     gausfitallblk->SetLineWidth(4);
     gausfitallblk->SetParameter(0,allblkbinmaxY);
     gausfitallblk->SetParameter(1,allblkbinmaxX);
     gausfitallblk->SetParLimits(1,allblkfitl,allblkfith);
     gausfitallblk->SetParameter(2,observed_adct_sigma);
     gausfitallblk->SetParLimits(2,1.,3*observed_adct_sigma);
-    gausfitallblk->SetParameter(3,25);
-    gausfitallblk->SetParameter(4,20);
-    gausfitallblk->SetParLimits(3,0,200);
+    //gausfitallblk->SetParameter(3,25);
+    //gausfitallblk->SetParameter(4,20);
+    //gausfitallblk->SetParLimits(3,0,200);
     
     hadctblk[set]->Fit("gausfitallblk","RBMQ");
     hadctblk[set]->Draw();
